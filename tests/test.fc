@@ -1,0 +1,2334 @@
+const int _priv_key_Alice = 777;
+const int _priv_key_Bob = 3456;
+const int _priv_key_wrong = 12452;
+const int _channel_id = 931;
+const int _channel_id_wrong = 71;
+const int _quarantin_duration = 24 * 3600;
+const int _conditional_close_duration = 3600;
+const int _misbehavior_fine = 30000000;
+const int _excess_fee = 30000000;
+const slice _Alice = "Ef8JfFUEJhhpRW80_jqD7zzQteH6EBHOzxiOhygRhBdt44YH"a;
+const slice _Bob = "Ef-FV4QTxLl-7Ct3E6MqOtMt-RGXMxi27g4I645lw6MTWg0f"a;
+
+
+
+forall X, Y -> X get(Y tup, int n) asm "INDEXVAR";
+forall X -> int is_null(X x) asm "ISNULL";
+(int) equal_slices(slice s1, slice s2) asm  "HASHSU SWAP HASHSU EQUAL";
+(int) equal_cells(cell c1, cell c2) asm "HASHCU SWAP HASHCU EQUAL";
+(int) tuple_length(tuple t) asm "TLEN";
+cell empty_cell() asm "<b b> PUSHREF";
+
+_ set_uninit_state(seqno_A, seqno_B) impure {
+  cell config = begin_cell()
+                  .store_uint(_quarantin_duration, 32)
+                  .store_coins(_misbehavior_fine)
+                  .store_uint(_conditional_close_duration, 32)
+                .end_cell();
+  cell payment_config = begin_cell()
+                          .store_coins(_excess_fee)
+                          .store_slice(_Alice)
+                          .store_slice(_Bob)
+                .end_cell();
+
+  cell result_state = begin_cell()
+            .store_int(0, 1)
+            .store_coins(0)
+            .store_coins(0)
+            .store_uint(priv_to_pub(_priv_key_Alice), 256)
+            .store_uint(priv_to_pub(_priv_key_Bob), 256)
+            .store_uint(_channel_id, 128)
+            .store_ref(config)
+            .store_uint(seqno_A, 32)
+            .store_uint(seqno_B, 32)
+            .store_dict(null())
+            .store_ref(payment_config)
+           .end_cell();
+  set_data(result_state);
+  return (config, payment_config, result_state);
+}
+
+int __test_uninit() {
+    set_uninit_state(0, 0);
+
+    var (int gas_used, stack) = invoke_method(get_channel_state, []);
+    var [state] = stack;
+    throw_unless(9001, state == state::UNINITED);
+    return true;
+}
+
+int __test_alice_top_up_uninit() {
+    set_uninit_state(0, 0);
+    int contract_balance = 5000000000;
+    slice message_body = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(322)
+                           .store_coins(1322)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [contract_balance, null(), null(), message_body]);
+    return true;
+}
+
+
+int __test_alice_top_up_uninit_wants_too_much() {
+    set_uninit_state(0, 0);
+    int contract_balance = 5000000000;
+    slice message_body = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(contract_balance)
+                           .store_coins(1322)
+                         .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [contract_balance, null(), null(), message_body]);
+    return true;
+}
+
+int __test_alice_init_state() {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(7, 11);
+    int initial_contract_balance = 5000000000;
+    slice top_up_body   = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(initial_contract_balance - 2 * _excess_fee)
+                           .store_coins(1322)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance, null(), null(), top_up_body]);
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id, 128)
+                     .store_coins(initial_contract_balance - 2 * _excess_fee + balance_addition)
+                     .store_coins(1322)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(true, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance + balance_addition, null(), null(), init_body]);
+
+    ;; check data
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+
+    throw_unless(9001, stack.first() == state::OPEN);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == initial_contract_balance - 2 * _excess_fee + balance_addition);
+    throw_unless(9003, r_bB == 1322);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+    throw_unless(9009, is_null(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+
+
+int __test_bob_init_state() {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(0, 12);
+    int initial_contract_balance = 5000000000;
+    slice top_up_body   = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(0)
+                           .store_coins(initial_contract_balance)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance, null(), null(), top_up_body]);
+
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id, 128)
+                     .store_coins(0)
+                     .store_coins(initial_contract_balance + balance_addition - _excess_fee - 1)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(false, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance + balance_addition, null(), null(), init_body]);
+
+    ;; check data
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+
+    throw_unless(9001, stack.first() == state::OPEN);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 0);
+    throw_unless(9003, r_bB == initial_contract_balance + balance_addition - _excess_fee - 1);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 0);
+    throw_unless(9008, stack.get(5).get(1) == 12);
+    throw_unless(9009, is_null(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+
+int __test_alice_init_state_wrong_channel_id() {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(0, 0);
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id + 1, 128)
+                     .store_coins(balance_addition - _excess_fee - 1)
+                     .store_coins(0)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(true, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [balance_addition, null(), null(), init_body]);
+    return true;
+}
+
+
+int __test_alice_init_state_decrease_balances() {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(7, 11);
+    int initial_contract_balance = 5000000000;
+    int Bob's_balance = 1322;
+    slice top_up_body   = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(initial_contract_balance - Bob's_balance)
+                           .store_coins(Bob's_balance)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance, null(), null(), top_up_body]);
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id, 128)
+                     .store_coins(initial_contract_balance - Bob's_balance + balance_addition - _excess_fee - 1)
+                     .store_coins(Bob's_balance - 1)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(true, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [initial_contract_balance + balance_addition, null(), null(), init_body]);
+    return true;
+}
+
+
+int __test_alice_init_state_not_enough_balance() {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(7, 11);
+    int initial_contract_balance = 5000000000;
+    int Bob's_balance = 1322;
+    slice top_up_body   = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(initial_contract_balance - Bob's_balance)
+                           .store_coins(Bob's_balance)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance, null(), null(), top_up_body]);
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id, 128)
+                     .store_coins(initial_contract_balance - Bob's_balance + balance_addition - _excess_fee + 1)
+                     .store_coins(Bob's_balance)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(true, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [initial_contract_balance + balance_addition, null(), null(), init_body]);
+    return true;
+
+}
+int __test_unauthorized_init() {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(7, 11);
+    int initial_contract_balance = 5000000000;
+    slice top_up_body   = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(initial_contract_balance - 2 * _excess_fee)
+                           .store_coins(1322)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance, null(), null(), top_up_body]);
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id, 128)
+                     .store_coins(initial_contract_balance - 2 * _excess_fee + balance_addition)
+                     .store_coins(1322)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(true, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_wrong))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [initial_contract_balance + balance_addition, null(), null(), init_body]);
+    return true;
+}
+
+
+() init_channel_helper() impure {
+    (cell g_config, cell g_payment_config, _) = set_uninit_state(7, 11);
+    int initial_contract_balance = 5000000000;
+    slice top_up_body   = begin_cell()
+                           .store_uint(op::top_up_balance, 32)
+                           .store_coins(initial_contract_balance)
+                           .store_coins(0)
+                         .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance, null(), null(), top_up_body]);
+    int balance_addition = 3000000000;
+    slice payload = begin_cell()
+                     .store_uint(0x696e6974, 32)
+                     .store_uint(_channel_id, 128)
+                     .store_coins(initial_contract_balance - _excess_fee + balance_addition - 1)
+                     .store_coins(0)
+                    .end_cell().begin_parse();
+    slice init_body = begin_cell()
+                        .store_uint(op::init_channel, 32)
+                        .store_int(true, 1)
+                        .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                        .store_slice(payload)
+                      .end_cell().begin_parse();
+    invoke_method(recv_internal, [initial_contract_balance + balance_addition, null(), null(), init_body]);
+}
+
+int __test_cooperative_close() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    set_balance([8000000000, empty_cell()]);
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var actions = parse_c5();
+    throw_unless(9011, actions.tuple_length() == 2);
+
+    ;; Withdrawal to Bob
+    throw_unless(9012, actions.get(0).get(0) == 0); ;; internal message
+    throw_unless(9013, actions.get(0).get(2) == 2 ); ;; mode 2
+    var msg_params = parse_internal_message(actions.get(0).get(1));
+
+    throw_unless(9014, msg_params.get(1) == false);
+    throw_unless(9015, equal_slices(msg_params.get(4), _Bob));
+    throw_unless(9016, msg_params.get(5) == 4000000000);
+    throw_unless(9017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+    ;; Withdrawal to Alice
+    throw_unless(10012, actions.get(1).get(0) == 0); ;; internal message
+    throw_unless(10013, actions.get(1).get(2) == 2 + 128 ); ;; mode
+    msg_params = parse_internal_message(actions.get(1).get(1));
+
+    throw_unless(10014, msg_params.get(1) == false);
+    throw_unless(10015, equal_slices(msg_params.get(4), _Alice));
+    throw_unless(10016, msg_params.get(5) == 3800000000);
+    throw_unless(10017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::UNINITED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 0);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 20);
+    throw_unless(9008, stack.get(5).get(1) == 20);
+    throw_unless(9009, is_null(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+
+int __test_unauthorized_cooperative_close() {
+
+  ;; No Alice signature
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_wrong)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+  ;; No Bob's signature
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+  ;; No Alice signature
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+
+int __test_cooperative_close_decrease_seqnos() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(7, 64)
+                            .store_uint(11, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(6, 64)
+                            .store_uint(12, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(8, 64)
+                            .store_uint(10, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_cooperative_close_B_too_high() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(1)
+                            .store_coins(9000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    set_balance([8000000000, empty_cell()]);
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var actions = parse_c5();
+    throw_unless(9011, actions.tuple_length() == 2);
+
+    ;; Withdrawal to Bob
+    throw_unless(9012, actions.get(0).get(0) == 0); ;; internal message
+    throw_unless(9013, actions.get(0).get(2) == 128 ); ;; mode 0
+    var msg_params = parse_internal_message(actions.get(0).get(1));
+
+    throw_unless(9014, msg_params.get(1) == false);
+    throw_unless(9015, equal_slices(msg_params.get(4), _Bob));
+    throw_unless(9016, msg_params.get(5) == 9000000000);
+    throw_unless(9017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+    ;; Withdrawal to Alice
+    throw_unless(10012, actions.get(1).get(0) == 0); ;; internal message
+    throw_unless(10013, actions.get(1).get(2) == 2 + 128 ); ;; mode 3
+    msg_params = parse_internal_message(actions.get(1).get(1));
+
+    throw_unless(10014, msg_params.get(1) == false);
+    throw_unless(10015, equal_slices(msg_params.get(4), _Alice));
+    throw_unless(10016, msg_params.get(5) == 1);
+    throw_unless(10017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+    return true;
+}
+
+
+int __test_cooperative_close_wrong_channel_id() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(777, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_cooperative_commit() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_uint(26, 64)
+                            .store_uint(29, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::OPEN);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 26);
+    throw_unless(9008, stack.get(5).get(1) == 29);
+    throw_unless(9009, is_null(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_cooperative_commit_unauthorized() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_uint(26, 64)
+                            .store_uint(29, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_wrong)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+int __test_cooperative_commit_seqnos_decrease() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_uint(6, 64)
+                            .store_uint(10, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    ;; the same are prohibitted as well
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_uint(7, 64)
+                            .store_uint(11, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_cooperative_commit_wrong_channel_id() {
+    init_channel_helper();
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(9887, 128)
+                            .store_uint(26, 64)
+                            .store_uint(29, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+slice build_semichannel_state(int seqno, int sent, cell cp, cell counterparty_state) {
+  return begin_cell()
+           .store_uint(0x43685374, 32)
+           .store_uint(_channel_id, 128)
+             .store_uint(seqno, 64)
+             .store_coins(sent)
+             .store_maybe_ref(cp)
+           .store_maybe_ref(counterparty_state)
+         .end_cell().begin_parse();
+}
+
+cell build_signed_semichannel(int privkey, int seqno, int sent, cell cp, cell counterparty_state) {
+  slice state = build_semichannel_state(seqno, sent, cp, counterparty_state);
+  return begin_cell()
+           .store_slice(sign(slice_hash(state), privkey))
+           .store_slice(state)
+         .end_cell();
+}
+
+slice build_semichannel_state_wrong_channel_id(int seqno, int sent, cell cp, cell counterparty_state) {
+  return begin_cell()
+           .store_uint(0x43685374, 32)
+           .store_uint(_channel_id + 1, 128)
+             .store_uint(seqno, 64)
+             .store_coins(sent)
+             .store_maybe_ref(cp)
+           .store_maybe_ref(counterparty_state)
+         .end_cell().begin_parse();
+}
+
+cell build_signed_semichannel_wrong_channel_id(int privkey, int seqno, int sent, cell cp, cell counterparty_state) {
+  slice state = build_semichannel_state_wrong_channel_id(seqno, sent, cp, counterparty_state);
+  return begin_cell()
+           .store_slice(sign(slice_hash(state), privkey))
+           .store_slice(state)
+         .end_cell();
+}
+
+int __test_start_uncooperative_close_null_state_Alice() {
+    init_channel_helper();
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(7, 64).store_coins(0).store_dict(null())
+                               .store_uint(11, 64).store_coins(0).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(true, 1)
+                               .store_int(false, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_start_uncooperative_close_null_state_Bob() {
+    init_channel_helper();
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(7, 64).store_coins(0).store_dict(null())
+                               .store_uint(11, 64).store_coins(0).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(false, 1)
+                               .store_int(false, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_start_uncooperative_close_not_null_with_refs() {
+    init_channel_helper();
+    ;; cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    ;; cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    cell alice_nextstate = build_signed_semichannel(_priv_key_Alice, 8, 1, null(),
+                                                    begin_cell()
+                                                     .store_uint(11, 64)
+                                                     .store_coins(0)
+                                                     .store_maybe_ref(null())
+                                                    .end_cell());
+    cell bob_nextstate = build_signed_semichannel(_priv_key_Bob, 12, 2, null(),
+                                                    begin_cell()
+                                                     .store_uint(7, 64)
+                                                     .store_coins(0)
+                                                     .store_maybe_ref(null())
+                                                    .end_cell());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_nextstate)
+                      .store_ref(bob_nextstate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(8, 64).store_coins(1).store_dict(null())
+                               .store_uint(12, 64).store_coins(2).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(true, 1)
+                               .store_int(false, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_start_uncooperative_close_unauthorized() {
+    init_channel_helper();
+    cell alice_zerostate = build_signed_semichannel(_priv_key_wrong, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_wrong, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+
+
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_wrong))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_start_uncooperative_close_wrong_channel_id() {
+    init_channel_helper();
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(987, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    cell alice_zerostate = build_signed_semichannel_wrong_channel_id(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel_wrong_channel_id(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+
+    cell alice_zerostate = build_signed_semichannel_wrong_channel_id(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel_wrong_channel_id(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    return true;
+}
+
+int __test_start_uncooperative_close_outdated_semichannels() {
+    init_channel_helper();
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 6, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_start_uncooperative_close_contradicting_semichannels() {
+    init_channel_helper();
+    ;; cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    ;; cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    cell alice_nextstate = build_signed_semichannel(_priv_key_Alice, 8, 1, null(),
+                                                    begin_cell()
+                                                     .store_uint(11, 64)
+                                                     .store_coins(0)
+                                                     .store_maybe_ref(null())
+                                                    .end_cell());
+    cell bob_nextstate = build_signed_semichannel(_priv_key_Bob, 13, 2, null(),
+                                                    begin_cell()
+                                                     .store_uint(9, 64)
+                                                     .store_coins(0)
+                                                     .store_maybe_ref(null())
+                                                    .end_cell());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_nextstate)
+                      .store_ref(bob_nextstate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_start_uncooperative_close_then_cooperative_close() {
+    init_channel_helper();
+    cell alice_zerostate = build_signed_semichannel(_priv_key_Alice, 7, 0, null(), null());
+    cell bob_zerostate = build_signed_semichannel(_priv_key_Bob, 11, 0, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_zerostate)
+                      .store_ref(bob_zerostate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+
+    ;; And now, try to close
+    slice payload   = begin_cell()
+                            .store_uint(0x436c6f73, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_coins(3800000000)
+                            .store_coins(4000000000)
+                            .store_uint(20, 64)
+                            .store_uint(20, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_close, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    set_balance([8000000000, empty_cell()]);
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var actions = parse_c5();
+    throw_unless(9011, actions.tuple_length() == 2);
+
+    ;; Withdrawal to Bob
+    throw_unless(9012, actions.get(0).get(0) == 0); ;; internal message
+    throw_unless(9013, actions.get(0).get(2) == 2 ); ;; mode 2
+    var msg_params = parse_internal_message(actions.get(0).get(1));
+
+    throw_unless(9014, msg_params.get(1) == false);
+    throw_unless(9015, equal_slices(msg_params.get(4), _Bob));
+    throw_unless(9016, msg_params.get(5) == 4000000000);
+    throw_unless(9017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+    ;; Withdrawal to Alice
+    throw_unless(10012, actions.get(1).get(0) == 0); ;; internal message
+    throw_unless(10013, actions.get(1).get(2) == 2 + 128 ); ;; mode
+    msg_params = parse_internal_message(actions.get(1).get(1));
+
+    throw_unless(10014, msg_params.get(1) == false);
+    throw_unless(10015, equal_slices(msg_params.get(4), _Alice));
+    throw_unless(10016, msg_params.get(5) == 3800000000);
+    throw_unless(10017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::UNINITED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 0);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 20);
+    throw_unless(9008, stack.get(5).get(1) == 20);
+    throw_unless(9009, is_null(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+int __test_start_uncooperative_close_cooperative_commit_old_state() {
+    init_channel_helper();
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 9, 10, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 15, 10, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+
+    ;; And now, commit seqnos less than quarantined: should update seqnos but continue closure
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_uint(8, 64)
+                            .store_uint(13, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 8);
+    throw_unless(9008, stack.get(5).get(1) == 13);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(null())
+                               .store_uint(15, 64).store_coins(10).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(false, 1)
+                               .store_int(false, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_start_uncooperative_close_cooperative_commit_fresher_state() {
+    init_channel_helper();
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 9, 10, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 15, 10, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+
+    ;; And now, commit seqnos higher than quarantined: should update seqnos and drop quarantine
+    slice payload   = begin_cell()
+                            .store_uint(0x43436d74, 32)
+                            .store_uint(_channel_id, 128)
+                            .store_uint(22, 64)
+                            .store_uint(22, 64)
+                       .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::cooperative_commit, 32)
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Alice)).end_cell())
+                   .store_ref(begin_cell().store_slice(sign(slice_hash(payload), _priv_key_Bob)).end_cell())
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::OPEN);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 22);
+    throw_unless(9008, stack.get(5).get(1) == 22);
+    throw_unless(9009, cell_null?(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+() create_quatantine_helper (int alice?) impure {
+    init_channel_helper();
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 9, 10, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 15, 10, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    int target_key = alice? ? _priv_key_Alice : _priv_key_Bob;
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(alice?, 1)
+                   .store_slice(sign(slice_hash(payload), target_key))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+}
+
+
+int __test_challenge_quarantined_state_alice() {
+    create_quatantine_helper(false);
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 113, null(), null());
+    set_now(1778);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               ;; Note, alice state won't be changed
+                               .store_uint(9, 64).store_coins(10).store_dict(null())
+                               .store_uint(16, 64).store_coins(113 + _misbehavior_fine).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(true, 1)
+                               .store_int(true, 1)
+                             .end_cell();
+    slice qs = stack.get(6).begin_parse();
+    throw_unless(11001, qs~load_uint(64) == 9);
+    throw_unless(11002, qs~load_coins() == 10);
+    throw_unless(11003, cell_null?(qs~load_dict()));
+    throw_unless(11004, qs~load_uint(64) == 16);
+    throw_unless(11005, qs~load_coins() == 113 + _misbehavior_fine);
+    throw_unless(11006, cell_null?(qs~load_dict()));
+    throw_unless(11007, qs~load_uint(32) == 1777);
+    throw_unless(11008, qs~load_int(1) == true);
+    throw_unless(11009, qs~load_int(1) == true);
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+int __test_challenge_quarantined_state_bob() {
+    create_quatantine_helper(true);
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 11, null(), null());
+    set_now(1779);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(10, 64).store_coins(11 + _misbehavior_fine).store_dict(null())
+                               .store_uint(15, 64).store_coins(10).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(false, 1)
+                               .store_int(true, 1)
+                             .end_cell();
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_challenge_quarantined_state_no_quarantine() {
+    init_channel_helper();
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 11, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_challenge_quarantined_state_with_the_same_state() {
+    create_quatantine_helper(false);
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 9, 10, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 15, 10, null(), null());
+    set_now(1777);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(null())
+                               .store_uint(15, 64).store_coins(10).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(true, 1)
+                               .store_int(true, 1)
+                             .end_cell();
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    return true;
+}
+
+
+int __test_challenge_quarantined_state_unauthorized() {
+
+    create_quatantine_helper(true);
+    cell alice_state = build_signed_semichannel(_priv_key_wrong, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 11, null(), null());
+    set_now(1779);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_wrong, 16, 11, null(), null());
+    set_now(1779);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 11, null(), null());
+    set_now(1779);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_wrong))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    return true;
+}
+
+
+int __test_challenge_quarantined_state_wrong_channel_id() {
+    create_quatantine_helper(false);
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 113, null(), null());
+    set_now(1778);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(1234, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    cell alice_state = build_signed_semichannel_wrong_channel_id(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 113, null(), null());
+    set_now(1778);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel_wrong_channel_id(_priv_key_Bob, 16, 113, null(), null());
+    set_now(1778);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    return true;
+}
+
+int __test_challenge_quarantined_state_outdated_semichannels() {
+    create_quatantine_helper(false);
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 8, 11, null(), null());
+    ;; it has lower seqno, but higher sent: Bob cheated
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 14, 113, null(), null());
+    set_now(1778);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    ;; only bob's state will be changed
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::CLOSURE_STARTED);
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(null())
+                               .store_uint(14, 64).store_coins(113 + _misbehavior_fine).store_dict(null())
+                               .store_uint(1777, 32)
+                               .store_int(true, 1)
+                               .store_int(true, 1)
+                             .end_cell();
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    return true;
+}
+
+int __test_challenge_quarantined_state_contradicting_semichannels() {
+    create_quatantine_helper(false);
+    ;;cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    ;;cell bob_state = build_signed_semichannel(_priv_key_Bob, 17, 113, null(), null());
+    cell alice_nextstate = build_signed_semichannel(_priv_key_Alice, 10, 11, null(),
+                                                    begin_cell()
+                                                     .store_uint(18, 64)
+                                                     .store_coins(113)
+                                                     .store_maybe_ref(null())
+                                                    .end_cell());
+    cell bob_nextstate = build_signed_semichannel(_priv_key_Bob, 17, 113, null(),
+                                                    begin_cell()
+                                                     .store_uint(10, 64)
+                                                     .store_coins(11)
+                                                     .store_maybe_ref(null())
+                                                    .end_cell());
+
+    set_now(1778);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_nextstate)
+                      .store_ref(bob_nextstate)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_challenge_quarantined_state_too_late() {
+    create_quatantine_helper(false);
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 10, 11, null(), null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 16, 113, null(), null());
+    set_now(1777 + _quarantin_duration + 1);
+    slice payload = begin_cell()
+                      .store_uint(0x43686751, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::challenge_quarantined_state, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+
+cell default_hashlock(int image, int deadline) method_id {
+  ;; NOW DEADLINE PUSHINT LESS 63 THROWIFNOT HASHSU HASH PUSHINT EQUAL 63 THROWIFNOT
+  return begin_cell()
+           .store_uint(0xF823, 16) ;; NOW
+           .store_uint(0x82, 8).store_uint(0x2, 5).store_int(deadline, 35) ;; DEADLINE PUSHINT
+           .store_uint(0xB9, 8) ;; LESS
+           .store_uint(0xf2bf, 16) ;; 63 THROWIFNOT
+           .store_uint(0xF901, 16) ;; HASHSU
+           .store_uint(0x82, 8).store_uint(30, 5).store_uint(0, 2).store_int(image, 257) ;; HASH PUSHINT
+           .store_uint(0xBA, 8) ;; EQUAL
+           .store_uint(0xf2bf, 16) ;; 63 THROWIFNOT
+           .store_uint(0x71, 8) ;; 63 THROWIFNOT
+         .end_cell();
+}
+
+
+int __test_default_hashlock() {
+  set_now(0);
+  slice preimage = begin_cell().end_cell().begin_parse();
+  cell condition = default_hashlock(slice_hash(preimage), 1000);
+  var executable_condition = cast_to_S2I(condition.begin_parse().bless());
+  throw_unless(123, executable_condition(preimage));
+  return true;
+}
+
+
+(cell,()) ~add_conditional (cell conditionals, int index, int amount, slice preimage) {
+       conditionals~udict_set(32, index, begin_cell()
+                                          .store_coins(amount)
+                                          .store_slice(default_hashlock(slice_hash(preimage), 300000).begin_parse())
+                                         .end_cell().begin_parse());
+       return (conditionals, ());
+}
+
+() create_quatantine_with_conditional_helper () impure {
+    init_channel_helper();
+    cell alice_conditionals = new_dict();
+    alice_conditionals~add_conditional(0, 10000, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    alice_conditionals~add_conditional(1, 20000, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    cell bob_conditionals = new_dict();
+    bob_conditionals~add_conditional(0, 777, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    cell alice_state = build_signed_semichannel(_priv_key_Alice, 9, 10, alice_conditionals, null());
+    cell bob_state = build_signed_semichannel(_priv_key_Bob, 15, 10, bob_conditionals, null());
+    set_now(1);
+    slice payload = begin_cell()
+                      .store_uint(0x556e436c, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_ref(alice_state)
+                      .store_ref(bob_state)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::start_uncooperative_close, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+} 
+
+
+int __test_settle_conditionals_null() {
+    create_quatantine_with_conditional_helper();
+    set_now(1 + _quarantin_duration + 1);
+    cell conditionals_to_settle = new_dict();
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+int __test_settle_conditionals_alice() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+    
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    alice_conditionals~add_conditional(0, 10000, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    alice_conditionals~add_conditional(1, 20000, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    cell bob_conditionals = new_dict();
+    bob_conditionals~add_conditional(0, 777, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                               .store_int(false, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    alice_conditionals~add_conditional(0, 10000, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    alice_conditionals~add_conditional(1, 20000, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    cell bob_conditionals = new_dict();
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10 + 777).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+int __test_settle_conditionals_bob() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    cell bob_conditionals = new_dict();
+    bob_conditionals~add_conditional(0, 777, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10 + 10000 + 20000).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+int __test_settle_conditionals_unauthorized() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_wrong))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    return true;
+}
+int __test_settle_conditionals_wrong_channel_id() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id + 1, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    return true;    
+}
+
+int __test_settle_nonexisted_conditionals() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 7, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 8, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    alice_conditionals~add_conditional(0, 10000, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    alice_conditionals~add_conditional(1, 20000, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    cell bob_conditionals = new_dict();
+    bob_conditionals~add_conditional(0, 777, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true; 
+}
+
+int __test_settle_conditionals_twice() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+    
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+    ;; NOTE ! Again
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    alice_conditionals~add_conditional(0, 10000, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    alice_conditionals~add_conditional(1, 20000, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    cell bob_conditionals = new_dict();
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10 + 777).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+int __test_settle_conditionals_in_two_steps() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    ;;conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    alice_conditionals~add_conditional(0, 10000, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    cell bob_conditionals = new_dict();
+    bob_conditionals~add_conditional(0, 777, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10 + 20000).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+
+
+
+    cell conditionals_to_settle = new_dict();
+    ;;conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    cell alice_conditionals = new_dict();
+    cell bob_conditionals = new_dict();
+    bob_conditionals~add_conditional(0, 777, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    throw_unless(9001, stack.first() == state::SETTLING_CONDITIONALS);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 8000000000 - _excess_fee - 1);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 7);
+    throw_unless(9008, stack.get(5).get(1) == 11);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10 + 10000 + 20000).store_dict(alice_conditionals)
+                               .store_uint(15, 64).store_coins(10).store_dict(bob_conditionals)
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+
+    return true;
+}
+
+int __test_settle_conditionals_too_early() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(_quarantin_duration - 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+int __test_settle_conditionals_too_late() {
+    create_quatantine_with_conditional_helper();
+
+    set_now(_quarantin_duration + _conditional_close_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+() create_quatantine_with_executed_conditional_helper() impure {
+    create_quatantine_with_conditional_helper();
+
+    set_now(1 + _quarantin_duration + 1);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 1, begin_cell().store_uint(2,8).end_cell().begin_parse());
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(1,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(false, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Bob))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+    cell conditionals_to_settle = new_dict();
+    conditionals_to_settle~udict_set(32, 0, begin_cell().store_uint(7,8).end_cell().begin_parse());
+    slice payload = begin_cell()
+                      .store_uint(0x436c436e, 32)
+                      .store_uint(_channel_id, 128)
+                      .store_dict(conditionals_to_settle)
+                    .end_cell().begin_parse();
+    slice body = begin_cell()
+                   .store_uint(op::settle_conditionals, 32)
+                   .store_int(true, 1)
+                   .store_slice(sign(slice_hash(payload), _priv_key_Alice))
+                   .store_slice(payload)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+
+    cell quarantined_state = begin_cell()
+                               .store_uint(9, 64).store_coins(10 + 10000 + 20000).store_dict(null())
+                               .store_uint(15, 64).store_coins(10 + 777).store_dict(null())
+                               .store_uint(1, 32)
+                               .store_int(true, 1)
+                             .end_cell();
+    throw_unless(9009, equal_cells(stack.get(6), quarantined_state));
+}
+
+
+int __test_finish_uncooperative_close() {
+    create_quatantine_with_executed_conditional_helper();
+
+    set_now(1 + _quarantin_duration + _conditional_close_duration + 1);
+    slice body = begin_cell()
+                   .store_uint(op::finish_uncooperative_close, 32)
+                 .end_cell().begin_parse();
+    invoke_method(recv_internal, [8000000000, null(), null(), body]);
+
+    var actions = parse_c5();
+    
+    int initial_alice_balance = 8000000000 - _excess_fee - 1;
+    int initial_bob_balance = 0;
+    
+    ;; after closure
+    int alice_balance = initial_alice_balance - (10 + 10000 + 20000) + 10 + 777;
+    int bob_balance = initial_bob_balance + (10 + 10000 + 20000) - (10 + 777);
+    throw_unless(9011, actions.tuple_length() == 2);
+
+    ;; Withdrawal to Bob
+    throw_unless(9012, actions.get(0).get(0) == 0); ;; internal message
+    throw_unless(9013, actions.get(0).get(2) == 2 ); ;; mode 2
+    var msg_params = parse_internal_message(actions.get(0).get(1));
+
+    throw_unless(9014, msg_params.get(1) == false);
+    throw_unless(9015, equal_slices(msg_params.get(4), _Bob));
+    throw_unless(9016, msg_params.get(5) == bob_balance);
+    throw_unless(9017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+    ;; Withdrawal to Alice
+    throw_unless(10012, actions.get(1).get(0) == 0); ;; internal message
+    throw_unless(10013, actions.get(1).get(2) == 2 + 128 ); ;; mode
+    msg_params = parse_internal_message(actions.get(1).get(1));
+
+    throw_unless(10014, msg_params.get(1) == false);
+    throw_unless(10015, equal_slices(msg_params.get(4), _Alice));
+    throw_unless(10016, msg_params.get(5) == alice_balance);
+    throw_unless(10017, equal_slices(msg_params.get(8),
+                       begin_cell().store_uint(0xdddc88ba, 32).store_uint(_channel_id, 128).end_cell().begin_parse()));
+
+
+    var (int gas_used, stack) = invoke_method(get_channel_data, []);
+    throw_unless(9001, stack.first() == state::UNINITED);
+    [int r_bA, int r_bB] = stack.get(1);
+    throw_unless(9002, r_bA == 0);
+    throw_unless(9003, r_bB == 0);
+    [int r_pkA, int r_pkB] = stack.get(2);
+    throw_unless(9004, r_pkA == priv_to_pub(_priv_key_Alice));
+    throw_unless(9005, r_pkB == priv_to_pub(_priv_key_Bob));
+    throw_unless(9006, stack.get(3) == _channel_id);
+    throw_unless(9007, stack.get(4).get(0) == _quarantin_duration);
+    throw_unless(9007, stack.get(4).get(1) == _misbehavior_fine);
+    throw_unless(9007, stack.get(4).get(2) == _conditional_close_duration);
+    throw_unless(9008, stack.get(5).get(0) == 10);
+    throw_unless(9008, stack.get(5).get(1) == 16);
+    throw_unless(9009, is_null(stack.get(6)));
+    throw_unless(9010, stack.get(7).get(0) == _excess_fee);
+    throw_unless(9010, equal_slices(stack.get(7).get(1), _Alice));
+    throw_unless(9010, equal_slices(stack.get(7).get(2), _Bob));
+    return true;
+}
+
+int __test_finish_uncooperative_close_too_early() {
+    create_quatantine_with_executed_conditional_helper();
+
+    set_now(1 + _quarantin_duration + _conditional_close_duration - 1);
+    slice body = begin_cell()
+                   .store_uint(op::finish_uncooperative_close, 32)
+                 .end_cell().begin_parse();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+
+    init_channel_helper();
+    invoke_method_expect_fail(recv_internal, [8000000000, null(), null(), body]);
+    return true;
+}
+
+
+
+
+

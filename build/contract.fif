@@ -1,0 +1,1313 @@
+"Asm.fif" include
+// automatically generated from `/home/func/.config/toncli/func-libs/math.func` `/home/func/.config/toncli/func-libs/error_codes.func` `/home/func/.config/toncli/func-libs/stdlib.func` `/home/func/Documents/shared/payment_channel/func/async-channel.func` 
+PROGRAM{
+  DECLPROC power
+  DECLPROC sqrt
+  DECLPROC avg
+  DECLPROC exp
+  DECLPROC log2
+  DECLPROC ~load_closure_config
+  DECLPROC closure_config::quarantin_duration
+  DECLPROC closure_config::misbehavior_fine
+  DECLPROC closure_config::conditional_close_duration
+  DECLPROC store_closure_config
+  DECLPROC load_storage
+  DECLPROC save_storage
+  DECLPROC top_up_balance
+  DECLPROC init_channel
+  DECLPROC send_payout
+  DECLPROC close_channel
+  DECLPROC cooperative_close
+  DECLPROC cooperative_commit
+  DECLPROC parse_semichannel_data
+  DECLPROC parse_maybe_semichannel_body
+  DECLPROC start_uncooperative_close
+  DECLPROC challenge_quarantined_state
+  DECLPROC settle_conditionals
+  DECLPROC finish_uncooperative_close
+  DECLPROC recv_any
+  DECLPROC recv_internal
+  DECLPROC recv_external
+  106901 DECLMETHOD get_channel_state
+  69628 DECLMETHOD get_channel_data
+  DECLGLOBVAR inited
+  DECLGLOBVAR balance_A
+  DECLGLOBVAR balance_B
+  DECLGLOBVAR key_A
+  DECLGLOBVAR key_B
+  DECLGLOBVAR channel_id
+  DECLGLOBVAR closure_config
+  DECLGLOBVAR commited_seqno_A
+  DECLGLOBVAR commited_seqno_B
+  DECLGLOBVAR quarantin
+  DECLGLOBVAR payment_config
+  DECLGLOBVAR unparsed_storage
+  DECLGLOBVAR storage_parse_level
+  power PROCINLINE:<{
+    //  x exponent
+    OVER	//  x exponent x
+    0 EQINT	//  x exponent _3
+    IF:<{	//  x exponent
+      2DROP	// 
+      0 PUSHINT	//  _4=0
+    }>ELSE<{	//  x exponent
+      DUP	//  x exponent exponent
+      0 EQINT	//  x exponent _6
+      IFJMP:<{	//  x exponent
+        2DROP	// 
+        1 PUSHINT	//  _7=1
+      }>	//  x exponent
+      OVER	//  x counter result
+      WHILE:<{
+        OVER	//  x counter result counter
+        1 GTINT	//  x counter result _11
+      }>DO<{	//  x counter result
+        s2 PUSH	//  x counter result x
+        MUL	//  x counter result
+        SWAP	//  x result counter
+        DEC	//  x result counter
+        SWAP	//  x counter result
+      }>	//  x counter result
+      2 1 BLKDROP2	//  result
+    }>
+  }>
+  sqrt PROCINLINE:<{
+    //  x
+    DUP	//  x x
+    0 EQINT	//  x _2
+    IF:<{	//  x
+      DROP	// 
+      0 PUSHINT	//  _3=0
+    }>ELSE<{	//  x
+      DUP	//  x x
+      4 LESSINT	//  x _5
+      IFJMP:<{	//  x
+        DROP	// 
+        1 PUSHINT	//  _6=1
+      }>	//  x
+      DUP	//  x x
+      INC	//  x _9
+      1 RSHIFT#	//  x z
+      OVER	//  x z y
+      WHILE:<{
+        2DUP	//  x z y z y
+        LESS	//  x z y _13
+      }>DO<{	//  x z y
+        DROP	//  x z
+        s0 s1 s0 PUSH3	//  x z y x z
+        DIV	//  x z y _14
+        ROT	//  x y _14 z
+        ADD	//  x y _15
+        1 RSHIFT#	//  x y z
+        SWAP	//  x z y
+      }>	//  x z y
+      2 1 BLKDROP2	//  y
+    }>
+  }>
+  avg PROCINLINE:<{
+    //  x y
+    ADD	//  _2
+    1 RSHIFT#	//  _4
+  }>
+  exp PROCINLINE:<{
+    //  x
+    DUP	//  x x
+    -1 GTINT	//  x _2
+    IF:<{	//  x
+      POW2	//  _3
+    }>ELSE<{	//  x
+      1 PUSHINT	//  x _6=1
+      SWAP	//  _6=1 x
+      NEGATE	//  _6=1 _8
+      RSHIFT	//  _3
+    }>
+  }>
+  log2 PROCINLINE:<{
+    //  x
+    0 PUSHINT	//  x n=0
+    7 PUSHPOW2	//  x n=0 _3=128
+    exp INLINECALLDICT	//  x n=0 _4
+    s2 s(-1) PUXC	//  x n=0 x _4
+    GEQ	//  x n=0 _5
+    IF:<{	//  x n=0
+      DROP	//  x
+      128 RSHIFT#	//  x
+      7 PUSHPOW2	//  x n
+    }>	//  x n
+    64 PUSHINT	//  x n _10=64
+    exp INLINECALLDICT	//  x n _11
+    s2 s(-1) PUXC	//  x n x _11
+    GEQ	//  x n _12
+    IF:<{	//  x n
+      SWAP	//  n x
+      64 RSHIFT#	//  n x
+      SWAP	//  x n
+      64 ADDCONST	//  x n
+    }>	//  x n
+    32 PUSHINT	//  x n _17=32
+    exp INLINECALLDICT	//  x n _18
+    s2 s(-1) PUXC	//  x n x _18
+    GEQ	//  x n _19
+    IF:<{	//  x n
+      SWAP	//  n x
+      32 RSHIFT#	//  n x
+      SWAP	//  x n
+      32 ADDCONST	//  x n
+    }>	//  x n
+    16 PUSHINT	//  x n _24=16
+    exp INLINECALLDICT	//  x n _25
+    s2 s(-1) PUXC	//  x n x _25
+    GEQ	//  x n _26
+    IF:<{	//  x n
+      SWAP	//  n x
+      16 RSHIFT#	//  n x
+      SWAP	//  x n
+      16 ADDCONST	//  x n
+    }>	//  x n
+    8 PUSHINT	//  x n _31=8
+    exp INLINECALLDICT	//  x n _32
+    s2 s(-1) PUXC	//  x n x _32
+    GEQ	//  x n _33
+    IF:<{	//  x n
+      SWAP	//  n x
+      8 RSHIFT#	//  n x
+      SWAP	//  x n
+      8 ADDCONST	//  x n
+    }>	//  x n
+    4 PUSHINT	//  x n _38=4
+    exp INLINECALLDICT	//  x n _39
+    s2 s(-1) PUXC	//  x n x _39
+    GEQ	//  x n _40
+    IF:<{	//  x n
+      SWAP	//  n x
+      4 RSHIFT#	//  n x
+      SWAP	//  x n
+      4 ADDCONST	//  x n
+    }>	//  x n
+    2 PUSHINT	//  x n _45=2
+    exp INLINECALLDICT	//  x n _46
+    s2 s(-1) PUXC	//  x n x _46
+    GEQ	//  x n _47
+    IF:<{	//  x n
+      SWAP	//  n x
+      2 RSHIFT#	//  n x
+      SWAP	//  x n
+      2 ADDCONST	//  x n
+    }>	//  x n
+    1 PUSHINT	//  x n _52=1
+    exp INLINECALLDICT	//  x n _53
+    s1 s2 XCHG	//  n x _53
+    GEQ	//  n _54
+    IF:<{	//  n
+      INC	//  n
+    }>	//  n
+  }>
+  ~load_closure_config PROC:<{
+    //  cs
+    LDREF	//  _2 cs
+    SWAP	//  cs _2
+    CTOS	//  cs conf
+    32 LDU	//  cs _5 conf
+    LDVARUINT16	//  cs _5 _8 conf
+    32 LDU	//  cs _5 _8 _21 _20
+    DROP	//  cs _5 _8 _10
+    TRIPLE	//  cs _13
+    closure_config SETGLOB
+  }>
+  closure_config::quarantin_duration PROCINLINE:<{
+    // 
+    closure_config GETGLOB	//  _0
+    FIRST	//  _1
+  }>
+  closure_config::misbehavior_fine PROCINLINE:<{
+    // 
+    closure_config GETGLOB	//  _0
+    SECOND	//  _1
+  }>
+  closure_config::conditional_close_duration PROCINLINE:<{
+    // 
+    closure_config GETGLOB	//  _0
+    THIRD	//  _1
+  }>
+  store_closure_config PROC:<{
+    //  b
+    closure_config::conditional_close_duration INLINECALLDICT	//  b _1
+    closure_config::quarantin_duration INLINECALLDICT	//  b _1 _2
+    NEWC	//  b _1 _2 _3
+    32 STU	//  b _1 _5
+    closure_config::misbehavior_fine INLINECALLDICT	//  b _1 _5 _6
+    STVARUINT16	//  b _1 _7
+    32 STU	//  b _9
+    ENDC	//  b _10
+    SWAP	//  _10 b
+    STREF	//  _11
+  }>
+  load_storage PROC:<{
+    //  level
+    DUP	//  level level
+    storage_parse_level SETGLOB
+    c4 PUSH	//  level _2
+    CTOS	//  level cs
+    1 LDI	//  level _4 cs
+    SWAP	//  level cs _4
+    inited SETGLOB
+    LDVARUINT16	//  level _7 cs
+    SWAP	//  level cs _7
+    balance_A SETGLOB
+    LDVARUINT16	//  level _9 cs
+    SWAP	//  level cs _9
+    balance_B SETGLOB
+    256 LDU	//  level _11 cs
+    SWAP	//  level cs _11
+    key_A SETGLOB
+    256 LDU	//  level _14 cs
+    SWAP	//  level cs _14
+    key_B SETGLOB
+    128 LDU	//  level _17 cs
+    SWAP	//  level cs _17
+    channel_id SETGLOB
+    ~load_closure_config CALLDICT	//  level cs
+    OVER	//  level cs level
+    2 GTINT	//  level cs _23
+    IF:<{	//  level cs
+      32 LDU	//  level _24 cs
+      SWAP	//  level cs _24
+      commited_seqno_A SETGLOB
+      32 LDU	//  level _27 cs
+      SWAP	//  level cs _27
+      commited_seqno_B SETGLOB
+      LDOPTREF	//  level _30 cs
+      SWAP	//  level cs _30
+      quarantin SETGLOB
+    }>	//  level cs
+    SWAP	//  cs level
+    3 GTINT	//  cs _33
+    IF:<{	//  cs
+      LDREF	//  _34 cs
+      SWAP	//  cs _34
+      payment_config SETGLOB
+    }>	//  cs
+    unparsed_storage SETGLOB
+  }>
+  save_storage PROC:<{
+    // 
+    storage_parse_level GETGLOB	//  level
+    NEWC	//  level storage
+    channel_id GETGLOB	//  level storage _4
+    key_B GETGLOB	//  level storage _4 _5
+    key_A GETGLOB	//  level storage _4 _5 _6
+    inited GETGLOB	//  level storage _4 _5 _6 _7
+    s0 s4 XCHG2	//  level _6 _4 _5 _7 storage
+    1 STI	//  level _6 _4 _5 _9
+    balance_A GETGLOB	//  level _6 _4 _5 _9 _10
+    STVARUINT16	//  level _6 _4 _5 _11
+    balance_B GETGLOB	//  level _6 _4 _5 _11 _12
+    STVARUINT16	//  level _6 _4 _5 _13
+    s1 s3 XCHG	//  level _5 _4 _6 _13
+    256 STU	//  level _5 _4 _15
+    s1 s2 XCHG	//  level _4 _5 _15
+    256 STU	//  level _4 _17
+    128 STU	//  level _19
+    store_closure_config CALLDICT	//  level storage
+    OVER	//  level storage level
+    2 GTINT	//  level storage _22
+    IF:<{	//  level storage
+      quarantin GETGLOB	//  level storage _23
+      commited_seqno_B GETGLOB	//  level storage _23 _24
+      commited_seqno_A GETGLOB	//  level storage _23 _24 _25
+      s0 s3 XCHG2	//  level _24 _23 _25 storage
+      32 STU	//  level _24 _23 _27
+      s1 s2 XCHG	//  level _23 _24 _27
+      32 STU	//  level _23 _29
+      STOPTREF	//  level storage
+    }>	//  level storage
+    SWAP	//  storage level
+    3 GTINT	//  storage _32
+    IF:<{	//  storage
+      payment_config GETGLOB	//  storage _33
+      SWAP	//  _33 storage
+      STREF	//  storage
+    }>ELSE<{	//  storage
+      unparsed_storage GETGLOB	//  storage _35
+      STSLICER	//  storage
+    }>
+    ENDC	//  _37
+    c4 POP
+  }>
+  top_up_balance PROC:<{
+    //  contract_balance msg
+    0 PUSHINT	//  contract_balance msg _2=0
+    load_storage CALLDICT
+    inited GETGLOB	//  contract_balance msg _5
+    NOT	//  contract_balance msg _6
+    100 THROWIFNOT
+    LDVARUINT16	//  contract_balance add_A msg
+    LDVARUINT16	//  contract_balance add_A _28 _27
+    DROP	//  contract_balance add_A add_B
+    balance_A GETGLOB	//  contract_balance add_A add_B _14
+    ROT	//  contract_balance add_B _14 add_A
+    ADD	//  contract_balance add_B _15
+    balance_A SETGLOB
+    balance_B GETGLOB	//  contract_balance add_B _16
+    SWAP	//  contract_balance _16 add_B
+    ADD	//  contract_balance _17
+    balance_B SETGLOB
+    balance_A GETGLOB	//  contract_balance _19
+    balance_B GETGLOB	//  contract_balance _19 _20
+    ADD	//  contract_balance _21
+    SWAP	//  _21 contract_balance
+    LEQ	//  _22
+    102 THROWIFNOT
+    save_storage CALLDICT
+  }>
+  init_channel PROC:<{
+    //  contract_balance msg
+    4 PUSHINT	//  contract_balance msg _2=4
+    load_storage CALLDICT
+    inited GETGLOB	//  contract_balance msg _5
+    NOT	//  contract_balance msg _6
+    100 THROWIFNOT
+    1 LDI	//  contract_balance is_A msg
+    9 PUSHPOW2	//  contract_balance is_A msg _14=512
+    LDSLICEX	//  contract_balance is_A signature msg
+    DUP	//  contract_balance is_A signature msg msg
+    HASHSU	//  contract_balance is_A signature msg _17
+    s0 s3 XCHG	//  contract_balance _17 signature msg is_A
+    IF:<{	//  contract_balance _17 signature msg
+      key_A GETGLOB	//  contract_balance _17 signature msg _18
+    }>ELSE<{	//  contract_balance _17 signature msg
+      key_B GETGLOB	//  contract_balance _17 signature msg _18
+    }>
+    s3 s3 s0 XCHG3	//  contract_balance msg _17 signature _18
+    CHKSIGNU	//  contract_balance msg _21
+    101 THROWIFNOT
+    32 LDU	//  contract_balance _24 msg
+    SWAP
+    1768843636 PUSHINT	//  contract_balance msg _24 _27=1768843636
+    EQUAL	//  contract_balance msg _28
+    104 THROWIFNOT
+    channel_id GETGLOB	//  contract_balance msg _31
+    SWAP	//  contract_balance _31 msg
+    128 LDU	//  contract_balance _31 _32 msg
+    -ROT	//  contract_balance msg _31 _32
+    EQUAL	//  contract_balance msg _35
+    114 THROWIFNOT
+    LDVARUINT16	//  contract_balance set_balance_A msg
+    LDVARUINT16	//  contract_balance set_balance_A _76 _75
+    DROP	//  contract_balance set_balance_A set_balance_B
+    balance_A GETGLOB	//  contract_balance set_balance_A set_balance_B _44
+    s2 s(-1) PUXC	//  contract_balance set_balance_A set_balance_B set_balance_A _44
+    GEQ	//  contract_balance set_balance_A set_balance_B _45
+    balance_B GETGLOB	//  contract_balance set_balance_A set_balance_B _45 _46
+    s2 s(-1) PUXC	//  contract_balance set_balance_A set_balance_B _45 set_balance_B _46
+    GEQ	//  contract_balance set_balance_A set_balance_B _45 _47
+    AND	//  contract_balance set_balance_A set_balance_B _48
+    102 THROWIFNOT
+    SWAP	//  contract_balance set_balance_B set_balance_A
+    balance_A SETGLOB
+    balance_B SETGLOB
+    payment_config GETGLOB	//  contract_balance _51
+    CTOS	//  contract_balance pcs
+    LDVARUINT16	//  contract_balance _78 _77
+    DROP	//  contract_balance excess_fee
+    balance_A GETGLOB	//  contract_balance excess_fee _57
+    balance_B GETGLOB	//  contract_balance excess_fee _57 _58
+    ADD	//  contract_balance excess_fee _59
+    SWAP	//  contract_balance _59 excess_fee
+    ADD	//  contract_balance _60
+    SWAP	//  _60 contract_balance
+    LESS	//  _61
+    102 THROWIFNOT
+    TRUE	//  _63
+    inited SETGLOB
+    save_storage CALLDICT
+  }>
+  send_payout PROC:<{
+    //  s_addr amount channel_id flags
+    3722217658 PUSHINT	//  s_addr amount channel_id flags _4=3722217658
+    0 PUSHINT	//  s_addr amount channel_id flags _4=3722217658 _5=0
+    16 PUSHINT	//  s_addr amount channel_id flags _4=3722217658 _5=0 _6=16
+    NEWC	//  s_addr amount channel_id flags _4=3722217658 _5=0 _6=16 _7
+    6 STU	//  s_addr amount channel_id flags _4=3722217658 _5=0 _9
+    s0 s6 XCHG2	//  _5=0 amount channel_id flags _4=3722217658 _9 s_addr
+    STSLICER	//  _5=0 amount channel_id flags _4=3722217658 _10
+    s0 s4 XCHG2	//  _5=0 _4=3722217658 channel_id flags _10 amount
+    STGRAMS	//  _5=0 _4=3722217658 channel_id flags _11
+    s1 s4 XCHG	//  flags _4=3722217658 channel_id _5=0 _11
+    107 STU	//  flags _4=3722217658 channel_id _25
+    s1 s2 XCHG	//  flags channel_id _4=3722217658 _25
+    32 STU	//  flags channel_id _27
+    128 STU	//  flags _29
+    ENDC	//  flags _30
+    SWAP	//  _30 flags
+    SENDRAWMSG
+  }>
+  close_channel PROC:<{
+    // 
+    payment_config GETGLOB	//  _1
+    CTOS	//  pcs
+    LDVARUINT16	//  _35 _34
+    NIP	//  pcs
+    LDMSGADDR	//  _8 pcs
+    LDMSGADDR	//  _8 _39 _38
+    DROP	//  addr_A addr_B
+    BALANCE	//  addr_A addr_B _13
+    FIRST	//  addr_A addr_B total_contract_balance
+    2 PUSHINT	//  addr_A addr_B total_contract_balance mode_B=2
+    balance_B GETGLOB	//  addr_A addr_B total_contract_balance mode_B=2 _17
+    ROT	//  addr_A addr_B mode_B=2 _17 total_contract_balance
+    GREATER	//  addr_A addr_B mode_B=2 _18
+    IF:<{	//  addr_A addr_B mode_B=2
+      DROP	//  addr_A addr_B
+      7 PUSHPOW2	//  addr_A addr_B mode_B=128
+    }>	//  addr_A addr_B mode_B
+    balance_B GETGLOB	//  addr_A addr_B mode_B _20
+    channel_id GETGLOB	//  addr_A addr_B mode_B _20 _21
+    ROT	//  addr_A addr_B _20 _21 mode_B
+    send_payout CALLDICT
+    balance_A GETGLOB	//  addr_A _23
+    channel_id GETGLOB	//  addr_A _23 _24
+    130 PUSHINT	//  addr_A _23 _24 _27
+    send_payout CALLDICT
+    FALSE	//  _29
+    inited SETGLOB
+    0 PUSHINT	//  _30=0
+    balance_A SETGLOB
+    0 PUSHINT	//  _31=0
+    balance_B SETGLOB
+    PUSHNULL	//  _32
+    quarantin SETGLOB
+    save_storage CALLDICT
+  }>
+  cooperative_close PROC:<{
+    //  msg
+    4 PUSHINT	//  msg _1=4
+    load_storage CALLDICT
+    LDREF	//  _4 msg
+    SWAP	//  msg _4
+    CTOS	//  msg sig_A
+    SWAP	//  sig_A msg
+    LDREF	//  sig_A _8 msg
+    SWAP	//  sig_A msg _8
+    CTOS	//  sig_A msg sig_B
+    OVER	//  sig_A msg sig_B msg
+    HASHSU	//  sig_A msg sig_B hash
+    s0 s2 XCHG	//  sig_A hash sig_B msg
+    32 LDU	//  sig_A hash sig_B _14 msg
+    SWAP
+    1131179891 PUSHINT	//  sig_A hash sig_B msg _14 _17=1131179891
+    EQUAL	//  sig_A hash sig_B msg _18
+    104 THROWIFNOT
+    channel_id GETGLOB	//  sig_A hash sig_B msg _21
+    SWAP	//  sig_A hash sig_B _21 msg
+    128 LDU	//  sig_A hash sig_B _21 _22 msg
+    -ROT	//  sig_A hash sig_B msg _21 _22
+    EQUAL	//  sig_A hash sig_B msg _25
+    114 THROWIFNOT
+    key_A GETGLOB	//  sig_A hash sig_B msg _28
+    s3 s4 s4 PUXC2	//  msg hash sig_B hash sig_A _28
+    CHKSIGNU	//  msg hash sig_B _29
+    key_B GETGLOB	//  msg hash sig_B _29 _30
+    s3 s3 s0 XCHG3	//  msg _29 hash sig_B _30
+    CHKSIGNU	//  msg _29 _31
+    AND	//  msg _32
+    101 THROWIFNOT
+    LDVARUINT16	//  _34 msg
+    SWAP	//  msg _34
+    balance_A SETGLOB
+    LDVARUINT16	//  _36 msg
+    SWAP	//  msg _36
+    balance_B SETGLOB
+    64 LDU	//  new_seqno_A msg
+    64 LDU	//  new_seqno_A _70 _69
+    DROP	//  new_seqno_A new_seqno_B
+    commited_seqno_A GETGLOB	//  new_seqno_A new_seqno_B _47
+    s2 PUSH	//  new_seqno_A new_seqno_B _47 new_seqno_A
+    LESS	//  new_seqno_A new_seqno_B _48
+    commited_seqno_B GETGLOB	//  new_seqno_A new_seqno_B _48 _49
+    s2 PUSH	//  new_seqno_A new_seqno_B _48 _49 new_seqno_B
+    LESS	//  new_seqno_A new_seqno_B _48 _50
+    AND	//  new_seqno_A new_seqno_B _51
+    108 THROWIFNOT
+    SWAP	//  new_seqno_B new_seqno_A
+    commited_seqno_A SETGLOB
+    commited_seqno_B SETGLOB
+    ACCEPT
+    close_channel CALLDICT
+  }>
+  cooperative_commit PROC:<{
+    //  msg
+    3 PUSHINT	//  msg _1=3
+    load_storage CALLDICT
+    LDREF	//  _4 msg
+    SWAP	//  msg _4
+    CTOS	//  msg sig_A
+    SWAP	//  sig_A msg
+    LDREF	//  sig_A _8 msg
+    SWAP	//  sig_A msg _8
+    CTOS	//  sig_A msg sig_B
+    OVER	//  sig_A msg sig_B msg
+    HASHSU	//  sig_A msg sig_B hash
+    s0 s2 XCHG	//  sig_A hash sig_B msg
+    32 LDU	//  sig_A hash sig_B _14 msg
+    SWAP
+    1128492404 PUSHINT	//  sig_A hash sig_B msg _14 _17=1128492404
+    EQUAL	//  sig_A hash sig_B msg _18
+    104 THROWIFNOT
+    channel_id GETGLOB	//  sig_A hash sig_B msg _21
+    SWAP	//  sig_A hash sig_B _21 msg
+    128 LDU	//  sig_A hash sig_B _21 _22 msg
+    -ROT	//  sig_A hash sig_B msg _21 _22
+    EQUAL	//  sig_A hash sig_B msg _25
+    114 THROWIFNOT
+    key_A GETGLOB	//  sig_A hash sig_B msg _28
+    s3 s4 s4 PUXC2	//  msg hash sig_B hash sig_A _28
+    CHKSIGNU	//  msg hash sig_B _29
+    key_B GETGLOB	//  msg hash sig_B _29 _30
+    s3 s3 s0 XCHG3	//  msg _29 hash sig_B _30
+    CHKSIGNU	//  msg _29 _31
+    AND	//  msg _32
+    101 THROWIFNOT
+    64 LDU	//  new_seqno_A msg
+    64 LDU	//  new_seqno_A _88 _87
+    DROP	//  new_seqno_A new_seqno_B
+    commited_seqno_A GETGLOB	//  new_seqno_A new_seqno_B _43
+    s2 PUSH	//  new_seqno_A new_seqno_B _43 new_seqno_A
+    LESS	//  new_seqno_A new_seqno_B _44
+    commited_seqno_B GETGLOB	//  new_seqno_A new_seqno_B _44 _45
+    s2 PUSH	//  new_seqno_A new_seqno_B _44 _45 new_seqno_B
+    LESS	//  new_seqno_A new_seqno_B _44 _46
+    AND	//  new_seqno_A new_seqno_B _47
+    108 THROWIFNOT
+    OVER	//  new_seqno_A new_seqno_B new_seqno_A
+    commited_seqno_A SETGLOB
+    DUP	//  new_seqno_A new_seqno_B new_seqno_B
+    commited_seqno_B SETGLOB
+    quarantin GETGLOB	//  new_seqno_A new_seqno_B _49
+    ISNULL	//  new_seqno_A new_seqno_B _50
+    IFNOT:<{	//  new_seqno_A new_seqno_B
+      quarantin GETGLOB	//  new_seqno_A new_seqno_B _52
+      CTOS	//  new_seqno_A new_seqno_B stored_states
+      64 LDU	//  new_seqno_A new_seqno_B _56 stored_states
+      LDVARUINT16	//  new_seqno_A new_seqno_B _56 _92 _91
+      NIP	//  new_seqno_A new_seqno_B stored_seqno_A stored_states
+      1 PUSHINT	//  new_seqno_A new_seqno_B stored_seqno_A stored_states _62=1
+      SDSKIPFIRST	//  new_seqno_A new_seqno_B stored_seqno_A stored_states
+      64 LDU	//  new_seqno_A new_seqno_B stored_seqno_A _94 _93
+      DROP	//  new_seqno_A new_seqno_B stored_seqno_A stored_seqno_B
+      s3 s3 XCHG2	//  stored_seqno_B new_seqno_B new_seqno_A stored_seqno_A
+      GREATER	//  stored_seqno_B new_seqno_B _71
+      s0 s2 XCHG	//  _71 new_seqno_B stored_seqno_B
+      GREATER	//  _71 _72
+      OR	//  _73
+      IF:<{	// 
+        PUSHNULL	//  _74
+        quarantin SETGLOB
+      }>	// 
+    }>ELSE<{
+      2DROP	// 
+    }>
+    ACCEPT
+    save_storage CALLDICT
+  }>
+  parse_semichannel_data PROCINLINE:<{
+    //  cs
+    32 LDU	//  _2 cs
+    SWAP
+    1130910580 PUSHINT	//  cs _2 _5=1130910580
+    EQUAL	//  cs _6
+    104 THROWIFNOT
+    channel_id GETGLOB	//  cs _9
+    SWAP	//  _9 cs
+    128 LDU	//  _9 _10 cs
+    -ROT	//  cs _9 _10
+    EQUAL	//  cs _13
+    114 THROWIFNOT
+    64 LDU	//  _16 cs
+    LDVARUINT16	//  _16 _19 cs
+    LDDICT	//  res res res cs
+    3 -ROLL	//  cs res res res
+  }>
+  parse_maybe_semichannel_body PROCINLINE:<{
+    //  cs
+    1 LDI	//  maybe cs
+    SWAP	//  cs maybe
+    IFNOT:<{	//  cs
+      -1 PUSHINT	//  cs _5=-1
+      DUP	//  cs _5=-1 _6=-1
+      PUSHNULL	//  cs _5=-1 _6=-1 _7
+    }>ELSE<{	//  cs
+      LDREF	//  _9 cs
+      SWAP	//  cs _9
+      CTOS	//  cs body
+      64 LDU	//  cs _12 body
+      LDVARUINT16	//  cs _12 _15 body
+      LDDICT	//  cs _12 _15 _28 _27
+      DROP	//  cs _12 _15 _17
+    }>
+  }>
+  start_uncooperative_close PROC:<{
+    //  msg
+    3 PUSHINT	//  msg _1=3
+    load_storage CALLDICT
+    quarantin GETGLOB	//  msg _4
+    ISNULL	//  msg _5
+    106 THROWIFNOT
+    1 LDI	//  signed_by_A msg
+    9 PUSHPOW2	//  signed_by_A msg _13=512
+    LDSLICEX	//  signed_by_A signature msg
+    DUP	//  signed_by_A signature msg msg
+    HASHSU	//  signed_by_A signature msg _16
+    s3 PUSH	//  signed_by_A signature msg _16 signed_by_A
+    IF:<{	//  signed_by_A signature msg _16
+      key_A GETGLOB	//  signed_by_A signature msg _16 _17
+    }>ELSE<{	//  signed_by_A signature msg _16
+      key_B GETGLOB	//  signed_by_A signature msg _16 _17
+    }>
+    s1 s3 s0 XCHG3	//  signed_by_A msg _16 signature _17
+    CHKSIGNU	//  signed_by_A msg _20
+    101 THROWIFNOT
+    32 LDU	//  signed_by_A _23 msg
+    SWAP
+    1433289580 PUSHINT	//  signed_by_A msg _23 _26=1433289580
+    EQUAL	//  signed_by_A msg _27
+    104 THROWIFNOT
+    channel_id GETGLOB	//  signed_by_A msg _30
+    SWAP	//  signed_by_A _30 msg
+    128 LDU	//  signed_by_A _30 _31 msg
+    -ROT	//  signed_by_A msg _30 _31
+    EQUAL	//  signed_by_A msg _34
+    114 THROWIFNOT
+    LDREF	//  signed_by_A _37 msg
+    SWAP	//  signed_by_A msg _37
+    CTOS	//  signed_by_A msg semi_channel_A
+    9 PUSHPOW2	//  signed_by_A msg semi_channel_A _42=512
+    LDSLICEX	//  signed_by_A msg signature_A semi_channel_A
+    DUP	//  signed_by_A msg signature_A semi_channel_A semi_channel_A
+    HASHSU	//  signed_by_A msg signature_A semi_channel_A _45
+    key_A GETGLOB	//  signed_by_A msg signature_A semi_channel_A _45 _46
+    s1 s3 s0 XCHG3	//  signed_by_A msg semi_channel_A _45 signature_A _46
+    CHKSIGNU	//  signed_by_A msg semi_channel_A _47
+    101 THROWIFNOT
+    SWAP	//  signed_by_A semi_channel_A msg
+    LDREF	//  signed_by_A semi_channel_A _129 _128
+    DROP	//  signed_by_A semi_channel_A _50
+    CTOS	//  signed_by_A semi_channel_A semi_channel_B
+    9 PUSHPOW2	//  signed_by_A semi_channel_A semi_channel_B _55=512
+    LDSLICEX	//  signed_by_A semi_channel_A signature_B semi_channel_B
+    DUP	//  signed_by_A semi_channel_A signature_B semi_channel_B semi_channel_B
+    HASHSU	//  signed_by_A semi_channel_A signature_B semi_channel_B _58
+    key_B GETGLOB	//  signed_by_A semi_channel_A signature_B semi_channel_B _58 _59
+    s1 s3 s0 XCHG3	//  signed_by_A semi_channel_A semi_channel_B _58 signature_B _59
+    CHKSIGNU	//  signed_by_A semi_channel_A semi_channel_B _60
+    101 THROWIFNOT
+    SWAP	//  signed_by_A semi_channel_B semi_channel_A
+    parse_semichannel_data INLINECALLDICT	//  signed_by_A semi_channel_B semi_channel_A _132 _133 _134
+    s0 s3 XCHG	//  signed_by_A semi_channel_B _134 _132 _133 semi_channel_A
+    parse_maybe_semichannel_body INLINECALLDICT	//  signed_by_A semi_channel_B _134 _132 _133 _142 _143 _144 _145
+    DROP
+    s2 POP	//  signed_by_A semi_channel_B conditionals_A seqno_A sent_A sent_B_ref_A seqno_B_ref_A
+    s0 s5 XCHG	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A semi_channel_B
+    parse_semichannel_data INLINECALLDICT	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A semi_channel_B _146 _147 _148
+    s0 s3 XCHG	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A _148 _146 _147 semi_channel_B
+    parse_maybe_semichannel_body INLINECALLDICT	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A _148 _146 _147 _156 _157 _158 _159
+    DROP
+    s2 POP	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B
+    commited_seqno_A GETGLOB	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _83
+    s8 s(-1) PUXC	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B seqno_A _83
+    GEQ	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84
+    commited_seqno_B GETGLOB	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84 _85
+    s5 s(-1) PUXC	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84 seqno_B _85
+    GEQ	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84 _86
+    AND	//  signed_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _87
+    s4 s10 PUXC	//  signed_by_A _87 conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B seqno_B seqno_B_ref_A
+    GEQ	//  signed_by_A _87 conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _88
+    s1 s10 XCHG	//  signed_by_A seqno_A_ref_B conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B _87 _88
+    AND	//  signed_by_A seqno_A_ref_B conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B _89
+    s7 s9 PUXC	//  signed_by_A _89 conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A seqno_A_ref_B
+    GEQ	//  signed_by_A _89 conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B _90
+    s1 s9 XCHG	//  signed_by_A sent_A_ref_B conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B _89 _90
+    AND	//  signed_by_A sent_A_ref_B conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B _91
+    s1 s4 PUXC	//  signed_by_A sent_A_ref_B conditionals_A seqno_A sent_A _91 conditionals_B seqno_B sent_B sent_B sent_B_ref_A
+    GEQ	//  signed_by_A sent_A_ref_B conditionals_A seqno_A sent_A _91 conditionals_B seqno_B sent_B _92
+    s1 s4 XCHG	//  signed_by_A sent_A_ref_B conditionals_A seqno_A sent_A sent_B conditionals_B seqno_B _91 _92
+    AND	//  signed_by_A sent_A_ref_B conditionals_A seqno_A sent_A sent_B conditionals_B seqno_B _93
+    s4 s7 PUXC	//  signed_by_A _93 conditionals_A seqno_A sent_A sent_B conditionals_B seqno_B sent_A sent_A_ref_B
+    GEQ	//  signed_by_A _93 conditionals_A seqno_A sent_A sent_B conditionals_B seqno_B _94
+    s1 s7 XCHG	//  signed_by_A seqno_B conditionals_A seqno_A sent_A sent_B conditionals_B _93 _94
+    AND	//  signed_by_A seqno_B conditionals_A seqno_A sent_A sent_B conditionals_B _95
+    105 THROWIFNOT
+    FALSE	//  signed_by_A seqno_B conditionals_A seqno_A sent_A sent_B conditionals_B _97
+    NOW	//  signed_by_A seqno_B conditionals_A seqno_A sent_A sent_B conditionals_B _97 _98
+    s0 s5 XCHG
+    NEWC	//  signed_by_A seqno_B conditionals_A _98 sent_A sent_B conditionals_B _97 seqno_A _99
+    64 STU	//  signed_by_A seqno_B conditionals_A _98 sent_A sent_B conditionals_B _97 _101
+    s0 s4 XCHG2	//  signed_by_A seqno_B conditionals_A _98 _97 sent_B conditionals_B _101 sent_A
+    STVARUINT16	//  signed_by_A seqno_B conditionals_A _98 _97 sent_B conditionals_B _102
+    s1 s5 XCHG	//  signed_by_A seqno_B conditionals_B _98 _97 sent_B conditionals_A _102
+    STDICT	//  signed_by_A seqno_B conditionals_B _98 _97 sent_B _103
+    s1 s5 XCHG	//  signed_by_A sent_B conditionals_B _98 _97 seqno_B _103
+    64 STU	//  signed_by_A sent_B conditionals_B _98 _97 _105
+    s0 s4 XCHG2	//  signed_by_A _97 conditionals_B _98 _105 sent_B
+    STVARUINT16	//  signed_by_A _97 conditionals_B _98 _106
+    s1 s2 XCHG	//  signed_by_A _97 _98 conditionals_B _106
+    STDICT	//  signed_by_A _97 _98 _107
+    32 STU	//  signed_by_A _97 _109
+    s1 s2 XCHG	//  _97 signed_by_A _109
+    1 STI	//  _97 _111
+    1 STI	//  _113
+    ENDC	//  _114
+    quarantin SETGLOB
+    save_storage CALLDICT
+  }>
+  challenge_quarantined_state PROC:<{
+    //  msg
+    3 PUSHINT	//  msg _1=3
+    load_storage CALLDICT
+    quarantin GETGLOB	//  msg _4
+    ISNULL	//  msg _5
+    NOT	//  msg _6
+    107 THROWIFNOT
+    1 LDI	//  challenged_by_A msg
+    9 PUSHPOW2	//  challenged_by_A msg _14=512
+    LDSLICEX	//  challenged_by_A signature msg
+    DUP	//  challenged_by_A signature msg msg
+    HASHSU	//  challenged_by_A signature msg _17
+    s3 PUSH	//  challenged_by_A signature msg _17 challenged_by_A
+    IF:<{	//  challenged_by_A signature msg _17
+      key_A GETGLOB	//  challenged_by_A signature msg _17 _18
+    }>ELSE<{	//  challenged_by_A signature msg _17
+      key_B GETGLOB	//  challenged_by_A signature msg _17 _18
+    }>
+    s1 s3 s0 XCHG3	//  challenged_by_A msg _17 signature _18
+    CHKSIGNU	//  challenged_by_A msg _21
+    101 THROWIFNOT
+    32 LDU	//  challenged_by_A _24 msg
+    SWAP
+    1130915665 PUSHINT	//  challenged_by_A msg _24 _27=1130915665
+    EQUAL	//  challenged_by_A msg _28
+    104 THROWIFNOT
+    channel_id GETGLOB	//  challenged_by_A msg _31
+    SWAP	//  challenged_by_A _31 msg
+    128 LDU	//  challenged_by_A _31 _32 msg
+    -ROT	//  challenged_by_A msg _31 _32
+    EQUAL	//  challenged_by_A msg _35
+    114 THROWIFNOT
+    LDREF	//  challenged_by_A _38 msg
+    SWAP	//  challenged_by_A msg _38
+    CTOS	//  challenged_by_A msg semi_channel_A
+    9 PUSHPOW2	//  challenged_by_A msg semi_channel_A _43=512
+    LDSLICEX	//  challenged_by_A msg signature_A semi_channel_A
+    DUP	//  challenged_by_A msg signature_A semi_channel_A semi_channel_A
+    HASHSU	//  challenged_by_A msg signature_A semi_channel_A _46
+    key_A GETGLOB	//  challenged_by_A msg signature_A semi_channel_A _46 _47
+    s1 s3 s0 XCHG3	//  challenged_by_A msg semi_channel_A _46 signature_A _47
+    CHKSIGNU	//  challenged_by_A msg semi_channel_A _48
+    101 THROWIFNOT
+    SWAP	//  challenged_by_A semi_channel_A msg
+    LDREF	//  challenged_by_A semi_channel_A _201 _200
+    DROP	//  challenged_by_A semi_channel_A _51
+    CTOS	//  challenged_by_A semi_channel_A semi_channel_B
+    9 PUSHPOW2	//  challenged_by_A semi_channel_A semi_channel_B _56=512
+    LDSLICEX	//  challenged_by_A semi_channel_A signature_B semi_channel_B
+    DUP	//  challenged_by_A semi_channel_A signature_B semi_channel_B semi_channel_B
+    HASHSU	//  challenged_by_A semi_channel_A signature_B semi_channel_B _59
+    key_B GETGLOB	//  challenged_by_A semi_channel_A signature_B semi_channel_B _59 _60
+    s1 s3 s0 XCHG3	//  challenged_by_A semi_channel_A semi_channel_B _59 signature_B _60
+    CHKSIGNU	//  challenged_by_A semi_channel_A semi_channel_B _61
+    101 THROWIFNOT
+    SWAP	//  challenged_by_A semi_channel_B semi_channel_A
+    parse_semichannel_data INLINECALLDICT	//  challenged_by_A semi_channel_B semi_channel_A _204 _205 _206
+    s0 s3 XCHG	//  challenged_by_A semi_channel_B _206 _204 _205 semi_channel_A
+    parse_maybe_semichannel_body INLINECALLDICT	//  challenged_by_A semi_channel_B _206 _204 _205 _214 _215 _216 _217
+    DROP
+    s2 POP	//  challenged_by_A semi_channel_B conditionals_A seqno_A sent_A sent_B_ref_A seqno_B_ref_A
+    s0 s5 XCHG	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A semi_channel_B
+    parse_semichannel_data INLINECALLDICT	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A semi_channel_B _218 _219 _220
+    s0 s3 XCHG	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A _220 _218 _219 semi_channel_B
+    parse_maybe_semichannel_body INLINECALLDICT	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A _220 _218 _219 _228 _229 _230 _231
+    DROP
+    s2 POP	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B
+    s3 s9 PUSH2	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B seqno_B seqno_B_ref_A
+    GEQ	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84
+    s8 s1 PUSH2	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84 seqno_A seqno_A_ref_B
+    GEQ	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _84 _85
+    AND	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _86
+    commited_seqno_B GETGLOB	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _86 _87
+    s5 s(-1) PUXC	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _86 seqno_B _87
+    GEQ	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _86 _88
+    AND	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _89
+    commited_seqno_A GETGLOB	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _89 _90
+    s9 s(-1) PUXC	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _89 seqno_A _90
+    GEQ	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _89 _91
+    AND	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A sent_B_ref_A conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _92
+    s3 s6 PUXC	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A _92 conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B sent_B sent_B_ref_A
+    GEQ	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A _92 conditionals_B seqno_B sent_B sent_A_ref_B seqno_A_ref_B _93
+    s1 s6 XCHG	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B sent_A_ref_B _92 _93
+    AND	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B sent_A_ref_B _94
+    s6 s1 PUXC	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B _94 sent_A sent_A_ref_B
+    GEQ	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B _94 _95
+    AND	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B _96
+    105 THROWIFNOT
+    s7 PUSH	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B seqno_B_ref_A
+    0 GTINT	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B _99
+    IF:<{	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B
+      commited_seqno_B GETGLOB	//  challenged_by_A seqno_B_ref_A conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B sent_B _101
+      s1 s8 XCHG	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B seqno_B_ref_A _101
+      GEQ	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B _102
+      105 THROWIFNOT
+    }>ELSE<{
+      s7 POP	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B
+    }>
+    s2 PUSH	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B seqno_A_ref_B
+    0 GTINT	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B _105
+    IF:<{	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B
+      commited_seqno_A GETGLOB	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_A_ref_B conditionals_B seqno_B _107
+      s1 s3 XCHG	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B seqno_A_ref_B _107
+      GEQ	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B _108
+      105 THROWIFNOT
+    }>ELSE<{
+      s2 POP	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B
+    }>
+    quarantin GETGLOB	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B _111
+    CTOS	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_states
+    64 LDU	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B _115 stored_states
+    LDVARUINT16	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_states
+    LDDICT	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_states
+    64 LDU	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A _125 stored_states
+    LDVARUINT16	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_states
+    LDDICT	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B stored_states
+    32 LDU	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started stored_states
+    closure_config::quarantin_duration INLINECALLDICT	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started stored_states _138
+    s2 s(-1) PUXC	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started stored_states quarantine_started _138
+    ADD	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started stored_states _139
+    NOW	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started stored_states _139 _140
+    GREATER	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started stored_states _141
+    111 THROWIFNOT
+    1 LDI	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A stored_states
+    1 LDI	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A _249 _248
+    DROP	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A quarantine_challenged
+    NOT	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A _152
+    115 THROWIFNOT
+    DUP	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A prev_signed_by_A
+    IF:<{	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A
+      s5 POP
+      s7 POP
+      s7 POP
+      s10 POP	//  challenged_by_A stored_sent_B conditionals_A seqno_A sent_A stored_conditionals_B quarantine_started stored_seqno_A stored_sent_A prev_signed_by_A stored_seqno_B
+      s7 s3 PUXC	//  challenged_by_A stored_sent_B conditionals_A seqno_A sent_A stored_conditionals_B quarantine_started stored_seqno_B stored_sent_A prev_signed_by_A seqno_A stored_seqno_A
+      GREATER	//  challenged_by_A stored_sent_B conditionals_A seqno_A sent_A stored_conditionals_B quarantine_started stored_seqno_B stored_sent_A prev_signed_by_A _156
+      s6 s2 PUXC	//  challenged_by_A stored_sent_B conditionals_A seqno_A sent_A stored_conditionals_B quarantine_started stored_seqno_B _156 prev_signed_by_A sent_A stored_sent_A
+      GREATER	//  challenged_by_A stored_sent_B conditionals_A seqno_A sent_A stored_conditionals_B quarantine_started stored_seqno_B _156 prev_signed_by_A _157
+      s1 s2 XCHG	//  challenged_by_A stored_sent_B conditionals_A seqno_A sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A _156 _157
+      OR	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A misbehavior_detected
+    }>ELSE<{	//  challenged_by_A sent_B conditionals_A seqno_A sent_A seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B stored_sent_B stored_conditionals_B quarantine_started prev_signed_by_A
+      s2 POP
+      s9 POP
+      s9 POP
+      s9 POP	//  challenged_by_A sent_B stored_sent_B prev_signed_by_A quarantine_started seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A stored_seqno_B
+      s5 s(-1) PUXC	//  challenged_by_A sent_B stored_sent_B prev_signed_by_A quarantine_started seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A seqno_B stored_seqno_B
+      GREATER	//  challenged_by_A sent_B stored_sent_B prev_signed_by_A quarantine_started seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A _159
+      s9 s8 PUXC	//  challenged_by_A sent_B _159 prev_signed_by_A quarantine_started seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A sent_B stored_sent_B
+      GREATER	//  challenged_by_A sent_B _159 prev_signed_by_A quarantine_started seqno_B conditionals_B stored_seqno_A stored_sent_A stored_conditionals_A _160
+      s1 s8 XCHG	//  challenged_by_A sent_B stored_conditionals_A prev_signed_by_A quarantine_started seqno_B conditionals_B stored_seqno_A stored_sent_A _159 _160
+      OR	//  challenged_by_A stored_sent_B stored_conditionals_A prev_signed_by_A quarantine_started stored_seqno_B stored_conditionals_B stored_seqno_A stored_sent_A misbehavior_detected
+      s6 s5 s0 XCHG3
+      s1 s3 XCHG
+      s4 s4 s0 XCHG3	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A misbehavior_detected
+    }>
+    s1 s9 PUSH2	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A misbehavior_detected prev_signed_by_A challenged_by_A
+    EQUAL	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A misbehavior_detected _163
+    NOT	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A misbehavior_detected _164
+    109 THROWIFNOT
+    IF:<{	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B prev_signed_by_A
+      IF:<{	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B
+        closure_config::misbehavior_fine INLINECALLDICT	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B _166
+        s1 s4 XCHG	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_seqno_B stored_conditionals_B quarantine_started stored_sent_A _166
+        ADD	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_seqno_B stored_conditionals_B quarantine_started stored_sent_A
+      }>ELSE<{	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B
+        closure_config::misbehavior_fine INLINECALLDICT	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B _168
+        s1 s7 XCHG	//  challenged_by_A stored_seqno_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_sent_B _168
+        ADD	//  challenged_by_A stored_seqno_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_sent_B
+        s0 s6 XCHG
+        s0 s3 XCHG	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_seqno_B stored_conditionals_B quarantine_started stored_sent_A
+      }>
+      s0 s3 XCHG	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B
+    }>ELSE<{
+      DROP	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B
+    }>
+    TRUE	//  challenged_by_A stored_sent_B stored_conditionals_A stored_seqno_A stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B _170
+    s0 s5 XCHG
+    NEWC	//  challenged_by_A stored_sent_B stored_conditionals_A _170 stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B stored_seqno_A _171
+    64 STU	//  challenged_by_A stored_sent_B stored_conditionals_A _170 stored_sent_A stored_conditionals_B quarantine_started stored_seqno_B _173
+    s0 s4 XCHG2	//  challenged_by_A stored_sent_B stored_conditionals_A _170 stored_seqno_B stored_conditionals_B quarantine_started _173 stored_sent_A
+    STVARUINT16	//  challenged_by_A stored_sent_B stored_conditionals_A _170 stored_seqno_B stored_conditionals_B quarantine_started _174
+    s1 s5 XCHG	//  challenged_by_A stored_sent_B quarantine_started _170 stored_seqno_B stored_conditionals_B stored_conditionals_A _174
+    STDICT	//  challenged_by_A stored_sent_B quarantine_started _170 stored_seqno_B stored_conditionals_B _175
+    s1 s2 XCHG	//  challenged_by_A stored_sent_B quarantine_started _170 stored_conditionals_B stored_seqno_B _175
+    64 STU	//  challenged_by_A stored_sent_B quarantine_started _170 stored_conditionals_B _177
+    s0 s4 XCHG2	//  challenged_by_A stored_conditionals_B quarantine_started _170 _177 stored_sent_B
+    STVARUINT16	//  challenged_by_A stored_conditionals_B quarantine_started _170 _178
+    s1 s3 XCHG	//  challenged_by_A _170 quarantine_started stored_conditionals_B _178
+    STDICT	//  challenged_by_A _170 quarantine_started _179
+    32 STU	//  challenged_by_A _170 _181
+    s1 s2 XCHG	//  _170 challenged_by_A _181
+    1 STI	//  _170 _183
+    1 STI	//  _185
+    ENDC	//  _186
+    quarantin SETGLOB
+    save_storage CALLDICT
+  }>
+  settle_conditionals PROC:<{
+    //  msg
+    3 PUSHINT	//  msg _1=3
+    load_storage CALLDICT
+    quarantin GETGLOB	//  msg _4
+    ISNULL	//  msg _5
+    NOT	//  msg _6
+    107 THROWIFNOT
+    1 LDI	//  from_A msg
+    9 PUSHPOW2	//  from_A msg _14=512
+    LDSLICEX	//  from_A signature msg
+    DUP	//  from_A signature msg msg
+    HASHSU	//  from_A signature msg _17
+    s3 PUSH	//  from_A signature msg _17 from_A
+    IF:<{	//  from_A signature msg _17
+      key_A GETGLOB	//  from_A signature msg _17 _18
+    }>ELSE<{	//  from_A signature msg _17
+      key_B GETGLOB	//  from_A signature msg _17 _18
+    }>
+    s1 s3 s0 XCHG3	//  from_A msg _17 signature _18
+    CHKSIGNU	//  from_A msg _21
+    101 THROWIFNOT
+    32 LDU	//  from_A _24 msg
+    SWAP
+    1131168622 PUSHINT	//  from_A msg _24 _27=1131168622
+    EQUAL	//  from_A msg _28
+    104 THROWIFNOT
+    channel_id GETGLOB	//  from_A msg _31
+    SWAP	//  from_A _31 msg
+    128 LDU	//  from_A _31 _32 msg
+    -ROT	//  from_A msg _31 _32
+    EQUAL	//  from_A msg _35
+    114 THROWIFNOT
+    LDDICT	//  from_A _130 _129
+    DROP	//  from_A conditionals_to_settle
+    quarantin GETGLOB	//  from_A conditionals_to_settle _41
+    CTOS	//  from_A conditionals_to_settle stored_states
+    64 LDU	//  from_A conditionals_to_settle _46 stored_states
+    LDVARUINT16	//  from_A conditionals_to_settle _46 _49 stored_states
+    LDDICT	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A stored_states
+    64 LDU	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A _56 stored_states
+    LDVARUINT16	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A _56 _59 stored_states
+    LDDICT	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B stored_states
+    32 LDU	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states
+    closure_config::quarantin_duration INLINECALLDICT	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states _68
+    s2 s(-1) PUXC	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states quarantine_started _68
+    ADD	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states quarantine_finished
+    DUP
+    NOW	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states quarantine_finished quarantine_finished _71
+    LESS	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states quarantine_finished _72
+    110 THROWIFNOT
+    closure_config::conditional_close_duration INLINECALLDICT	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states quarantine_finished _75
+    ADD	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states _76
+    NOW	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states _76 _77
+    GREATER	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started stored_states _78
+    112 THROWIFNOT
+    1 LDI	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started _146 _145
+    DROP	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A
+    s5 s6 s9 PUSH3	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target target_sent from_A
+    IF:<{	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target target_sent
+      2DROP	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A
+      s2 s3 PUSH2	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target target_sent
+    }>	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target target_sent
+    UNTIL:<{
+      s0 s10 XCHG
+      32 PUSHINT	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle _91=32
+      DICTUREMMIN
+      NULLSWAPIFNOT2	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle input cid continue
+      DUP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle input cid continue continue
+      IF:<{	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle input cid continue
+        DROP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle input cid
+        s0 s3 XCHG2
+        32 PUSHINT	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle cid target _95=32
+        DICTUDELGET
+        NULLSWAPIFNOT	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle target condition continue
+        DUP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle target condition continue continue
+        IF:<{	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle target condition continue
+          SWAP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle target continue condition
+          LDVARUINT16	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle target continue amount condition
+          BLESS	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A input conditionals_to_settle target continue amount executable_condition
+          s1 s5 XCHG	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A amount conditionals_to_settle target continue input executable_condition
+          1 1 CALLXARGS	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A amount conditionals_to_settle target continue _103
+          IF:<{	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A amount conditionals_to_settle target continue
+            s12 s3 XCHG2	//  from_A target seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A continue conditionals_to_settle target_sent amount
+            ADD	//  from_A target seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A continue conditionals_to_settle target_sent
+            s0 s11 XCHG	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A continue conditionals_to_settle target
+          }>ELSE<{
+            s3 POP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A continue conditionals_to_settle target
+          }>
+        }>ELSE<{
+          s4 POP
+          DROP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A continue conditionals_to_settle target
+        }>
+        s0 s2 XCHG	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle continue
+      }>ELSE<{
+        2 1 BLKDROP2	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle continue
+      }>
+      NOT	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target conditionals_to_settle _105
+      s1 s11 XCHG	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target target_sent _105
+    }>	//  from_A conditionals_to_settle seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target target_sent
+    s10 POP	//  from_A target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A target
+    s0 s10 XCHG	//  target target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A from_A
+    IF:<{	//  target target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A
+      2 2 BLKDROP2	//  conditionals_B sent_B seqno_A sent_A conditionals_A seqno_B quarantine_started state_commited_by_A
+    }>ELSE<{	//  target target_sent seqno_A sent_A conditionals_A seqno_B sent_B conditionals_B quarantine_started state_commited_by_A
+      s5 POP
+      s5 POP	//  conditionals_A sent_A seqno_A quarantine_started state_commited_by_A seqno_B sent_B conditionals_B
+      s0 s7 XCHG
+      s6 s3 XCHG2
+      s1 s4 XCHG	//  conditionals_B sent_B seqno_A sent_A conditionals_A seqno_B quarantine_started state_commited_by_A
+    }>
+    s0 s5 XCHG
+    NEWC	//  conditionals_B sent_B state_commited_by_A sent_A conditionals_A seqno_B quarantine_started seqno_A _106
+    64 STU	//  conditionals_B sent_B state_commited_by_A sent_A conditionals_A seqno_B quarantine_started _108
+    s0 s4 XCHG2	//  conditionals_B sent_B state_commited_by_A quarantine_started conditionals_A seqno_B _108 sent_A
+    STVARUINT16	//  conditionals_B sent_B state_commited_by_A quarantine_started conditionals_A seqno_B _109
+    s1 s2 XCHG	//  conditionals_B sent_B state_commited_by_A quarantine_started seqno_B conditionals_A _109
+    STDICT	//  conditionals_B sent_B state_commited_by_A quarantine_started seqno_B _110
+    64 STU	//  conditionals_B sent_B state_commited_by_A quarantine_started _112
+    s0 s3 XCHG2	//  conditionals_B quarantine_started state_commited_by_A _112 sent_B
+    STVARUINT16	//  conditionals_B quarantine_started state_commited_by_A _113
+    s1 s3 XCHG	//  state_commited_by_A quarantine_started conditionals_B _113
+    STDICT	//  state_commited_by_A quarantine_started _114
+    32 STU	//  state_commited_by_A _116
+    1 STI	//  _118
+    ENDC	//  _119
+    quarantin SETGLOB
+    save_storage CALLDICT
+  }>
+  finish_uncooperative_close PROC:<{
+    // 
+    4 PUSHINT	//  _0=4
+    load_storage CALLDICT
+    quarantin GETGLOB	//  _3
+    ISNULL	//  _4
+    NOT	//  _5
+    107 THROWIFNOT
+    quarantin GETGLOB	//  _8
+    CTOS	//  stored_states
+    64 LDU	//  _13 stored_states
+    LDVARUINT16	//  _13 _16 stored_states
+    LDDICT	//  _13 _16 _73 _72
+    NIP	//  seqno_A sent_A stored_states
+    64 LDU	//  seqno_A sent_A _23 stored_states
+    LDVARUINT16	//  seqno_A sent_A _23 _26 stored_states
+    LDDICT	//  seqno_A sent_A _23 _26 _79 _78
+    NIP	//  seqno_A sent_A seqno_B sent_B stored_states
+    32 LDU	//  seqno_A sent_A seqno_B sent_B _81 _80
+    DROP	//  seqno_A sent_A seqno_B sent_B quarantine_started
+    closure_config::quarantin_duration INLINECALLDICT	//  seqno_A sent_A seqno_B sent_B quarantine_started _35
+    ADD	//  seqno_A sent_A seqno_B sent_B _36
+    closure_config::conditional_close_duration INLINECALLDICT	//  seqno_A sent_A seqno_B sent_B _36 _37
+    ADD	//  seqno_A sent_A seqno_B sent_B _38
+    NOW	//  seqno_A sent_A seqno_B sent_B _38 _39
+    LESS	//  seqno_A sent_A seqno_B sent_B _40
+    113 THROWIFNOT
+    ACCEPT
+    balance_A GETGLOB	//  seqno_A sent_A seqno_B sent_B _43
+    OVER	//  seqno_A sent_A seqno_B sent_B _43 sent_B
+    ADD	//  seqno_A sent_A seqno_B sent_B _44
+    s3 PUSH	//  seqno_A sent_A seqno_B sent_B _44 sent_A
+    SUB	//  seqno_A sent_A seqno_B sent_B _45
+    balance_A SETGLOB
+    balance_B GETGLOB	//  seqno_A sent_A seqno_B sent_B _46
+    s0 s3 XCHG2	//  seqno_A sent_B seqno_B _46 sent_A
+    ADD	//  seqno_A sent_B seqno_B _47
+    ROT	//  seqno_A seqno_B _47 sent_B
+    SUB	//  seqno_A seqno_B _48
+    balance_B SETGLOB
+    balance_B GETGLOB	//  seqno_A seqno_B _49
+    0 LESSINT	//  seqno_A seqno_B _51
+    IF:<{	//  seqno_A seqno_B
+      balance_A GETGLOB	//  seqno_A seqno_B _52
+      balance_B GETGLOB	//  seqno_A seqno_B _52 _53
+      ADD	//  seqno_A seqno_B _54
+      balance_A SETGLOB
+      0 PUSHINT	//  seqno_A seqno_B _55=0
+      balance_B SETGLOB
+    }>	//  seqno_A seqno_B
+    balance_A GETGLOB	//  seqno_A seqno_B _56
+    0 LESSINT	//  seqno_A seqno_B _58
+    IF:<{	//  seqno_A seqno_B
+      balance_B GETGLOB	//  seqno_A seqno_B _59
+      balance_A GETGLOB	//  seqno_A seqno_B _59 _60
+      ADD	//  seqno_A seqno_B _61
+      balance_B SETGLOB
+      0 PUSHINT	//  seqno_A seqno_B _62=0
+      balance_B SETGLOB
+    }>	//  seqno_A seqno_B
+    SWAP	//  seqno_B seqno_A
+    INC	//  seqno_B _64
+    commited_seqno_A SETGLOB
+    INC	//  _66
+    commited_seqno_B SETGLOB
+    close_channel CALLDICT
+  }>
+  recv_any PROC:<{
+    SAMEALTSAVE	//  contract_balance msg
+    32 LDU	//  contract_balance op msg
+    OVER
+    1741148801 PUSHINT	//  contract_balance op msg op _6=1741148801
+    EQUAL	//  contract_balance op msg _7
+    IFJMP:<{	//  contract_balance op msg
+      NIP	//  contract_balance msg
+      top_up_balance CALLDICT
+    }>	//  contract_balance op msg
+    OVER
+    235282626 PUSHINT	//  contract_balance op msg op _9=235282626
+    EQUAL	//  contract_balance op msg _10
+    IFJMP:<{	//  contract_balance op msg
+      NIP	//  contract_balance msg
+      init_channel CALLDICT
+      RETALT
+    }>	//  contract_balance op msg
+    s2 POP	//  msg op
+    DUP
+    1433884798 PUSHINT	//  msg op op _12=1433884798
+    EQUAL	//  msg op _13
+    IFJMP:<{	//  msg op
+      DROP	//  msg
+      cooperative_close CALLDICT
+      RETALT
+    }>	//  msg op
+    DUP
+    2040604399 PUSHINT	//  msg op op _15=2040604399
+    EQUAL	//  msg op _16
+    IFJMP:<{	//  msg op
+      DROP	//  msg
+      cooperative_commit CALLDICT
+      RETALT
+    }>	//  msg op
+    DUP
+    521476815 PUSHINT	//  msg op op _18=521476815
+    EQUAL	//  msg op _19
+    IFJMP:<{	//  msg op
+      DROP	//  msg
+      start_uncooperative_close CALLDICT
+      RETALT
+    }>	//  msg op
+    DUP
+    143567410 PUSHINT	//  msg op op _21=143567410
+    EQUAL	//  msg op _22
+    IFJMP:<{	//  msg op
+      DROP	//  msg
+      challenge_quarantined_state CALLDICT
+      RETALT
+    }>	//  msg op
+    DUP
+    1727459433 PUSHINT	//  msg op op _24=1727459433
+    EQUAL	//  msg op _25
+    IFJMP:<{	//  msg op
+      DROP	//  msg
+      settle_conditionals CALLDICT
+      RETALT
+    }>	//  msg op
+    NIP	//  op
+    625158801 PUSHINT	//  op _27=625158801
+    EQUAL	//  _28
+    IFJMP:<{	// 
+      finish_uncooperative_close CALLDICT
+      RETALT
+    }>	// 
+    16 PUSHPOW2DEC	//  _30=65535
+    THROWANY
+  }>
+  recv_internal PROC:<{
+    //  contract_balance _1 _2 in_msg
+    2 1 BLKDROP2	//  contract_balance in_msg
+    recv_any CALLDICT
+  }>
+  recv_external PROC:<{
+    //  contract_balance _1 _2 in_msg
+    2 1 BLKDROP2	//  contract_balance in_msg
+    recv_any CALLDICT
+  }>
+  get_channel_state PROC:<{
+    // 
+    4 PUSHINT	//  _0=4
+    load_storage CALLDICT
+    inited GETGLOB	//  _2
+    IFNOTJMP:<{	// 
+      0 PUSHINT	//  _3=0
+    }>	// 
+    quarantin GETGLOB	//  _4
+    ISNULL	//  _5
+    IFJMP:<{	// 
+      1 PUSHINT	//  _6=1
+    }>	// 
+    quarantin GETGLOB	//  _8
+    CTOS	//  stored_states
+    64 PUSHINT	//  stored_states _11=64
+    SDSKIPFIRST	//  stored_states
+    LDVARUINT16	//  _43 _42
+    NIP	//  stored_states
+    65 PUSHINT	//  stored_states _18
+    SDSKIPFIRST	//  stored_states
+    LDVARUINT16	//  _45 _44
+    NIP	//  stored_states
+    1 PUSHINT	//  stored_states _23=1
+    SDSKIPFIRST	//  stored_states
+    32 LDU	//  _47 _46
+    DROP	//  quarantine_started
+    closure_config::quarantin_duration INLINECALLDICT	//  quarantine_started _29
+    s1 s(-1) PUXC	//  quarantine_started quarantine_started _29
+    ADD	//  quarantine_started _30
+    NOW	//  quarantine_started _30 _31
+    GREATER	//  quarantine_started _32
+    IFJMP:<{	//  quarantine_started
+      DROP	// 
+      2 PUSHINT	//  _33=2
+    }>	//  quarantine_started
+    closure_config::quarantin_duration INLINECALLDICT	//  quarantine_started _34
+    ADD	//  _35
+    closure_config::conditional_close_duration INLINECALLDICT	//  _35 _36
+    ADD	//  _37
+    NOW	//  _37 _38
+    GREATER	//  _39
+    IFJMP:<{	// 
+      3 PUSHINT	//  _40=3
+    }>	// 
+    4 PUSHINT	//  _41=4
+  }>
+  get_channel_data PROC:<{
+    // 
+    4 PUSHINT	//  _0=4
+    load_storage CALLDICT
+    payment_config GETGLOB	//  _3
+    CTOS	//  pcs
+    LDVARUINT16	//  excess_fee pcs
+    LDMSGADDR	//  excess_fee _10 pcs
+    LDMSGADDR	//  excess_fee _10 _33 _32
+    DROP	//  excess_fee addr_A addr_B
+    get_channel_state CALLDICT	//  excess_fee addr_A addr_B _14
+    balance_A GETGLOB	//  excess_fee addr_A addr_B _14 _16
+    balance_B GETGLOB	//  excess_fee addr_A addr_B _14 _16 _17
+    PAIR	//  excess_fee addr_A addr_B _14 _15
+    key_A GETGLOB	//  excess_fee addr_A addr_B _14 _15 _19
+    key_B GETGLOB	//  excess_fee addr_A addr_B _14 _15 _19 _20
+    PAIR	//  excess_fee addr_A addr_B _14 _15 _18
+    channel_id GETGLOB	//  excess_fee addr_A addr_B _14 _15 _18 _21
+    closure_config GETGLOB	//  excess_fee addr_A addr_B _14 _15 _18 _21 _22
+    commited_seqno_A GETGLOB	//  excess_fee addr_A addr_B _14 _15 _18 _21 _22 _24
+    commited_seqno_B GETGLOB	//  excess_fee addr_A addr_B _14 _15 _18 _21 _22 _24 _25
+    PAIR	//  excess_fee addr_A addr_B _14 _15 _18 _21 _22 _23
+    quarantin GETGLOB	//  excess_fee addr_A addr_B _14 _15 _18 _21 _22 _23 _26
+    s9 s8 s7 XCHG3	//  _22 _23 _26 _14 _15 _18 _21 excess_fee addr_A addr_B
+    TRIPLE	//  _22 _23 _26 _14 _15 _18 _21 _27
+    s4 s7 XCHG
+    s3 s6 XCHG
+    s5 s4 s0 XCHG3
+    s3 s3 s0 XCHG3	//  _14 _15 _18 _21 _22 _23 _26 _27
+  }>
+}END>c

@@ -1,0 +1,8 @@
+#!/usr/bin/fift -s
+"TonUtil.fif" include
+"Asm.fif" include
+
+."payment-channel:" cr
+
+"contract.fif" include
+2 boc+>B dup Bx. cr

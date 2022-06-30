@@ -1,0 +1,5 @@
+contract:
+  func:
+    - func/async-channel.func
+  tests:
+    - tests/test.fc
