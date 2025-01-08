@@ -112,6 +112,16 @@ Internal message handlers:
 ```
 7. `finish_uncooperative_close`:  *Can be external* `finish_uncooperative_close#25432a91 = InternalMsgBody;`
 
+# Overpass Channels Enhancements
+
+## zk-SNARKs for Privacy and Independent Verification
+Overpass Channels leverage zk-SNARKs to ensure privacy and independent verification of transactions. This means that transactions are cryptographically proven to be valid without revealing sensitive details such as the amount, sender, or receiver. This eliminates the need for network-wide consensus and enhances privacy.
+
+## Dynamic Rebalancing and Fluid Liquidity Mechanisms
+Overpass Channels include dynamic rebalancing and fluid liquidity mechanisms. The system rebalances channels dynamically to maintain optimal liquidity, ensuring efficiency across payment channels.
+
+## Robust Censorship Resistance and Instant Finality Features
+Overpass Channels provide robust censorship resistance and instant finality features. The decentralized transaction processing and zk-SNARK integration make it nearly impossible for any entity to censor or block transactions. Transactions achieve finality as soon as they are verified by the recipient, significantly reducing latency and improving the overall user experience.
 
 # Payment Channel Network
 While payment channels are great for makinginstant and free of charge payments between given two parties, it can not be used between arbitrary partirs which not yet settled channel contract on-chain. This problem may be solved by network of payment channels, when party A may send tokens to party E through the chain of A->B, B->C, C->D, D->E channels. To make such payment trustless and safe conditional payments can be used. For instance A and E agrees on some `seed` and calculate `hash` of the seed.

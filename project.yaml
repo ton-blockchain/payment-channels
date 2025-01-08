@@ -1,5 +1,6 @@
 contract:
   func:
     - func/async-channel.func
+    - func/overpass-channel.func
   tests:
     - tests/test.fc
